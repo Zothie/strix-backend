@@ -1,0 +1,16 @@
+node_modules
+npm-debug.log
+
+.dockerignore
+Dockerfile
+
+docker-compose*
+
+.gitignore
+.git
+.gitlab-ci.yml
+
+.hg
+.svn
+
+.env

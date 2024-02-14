@@ -1,0 +1,13 @@
+version: "2"
+
+services:
+  nginx:
+    build:
+      context: ./
+    container_name: strix-backend
+    environment:
+      MONGODB_URI: 'mongodb+srv://root:qKFwQSvHPMsGfPZY@cluster1.m1imnkx.mongodb.net/StrixTestDB'
+      CORS_WHITELIST: ''
+    ports:
+      - 8000:3001
+
