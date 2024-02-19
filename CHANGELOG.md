@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.2
+2024-02-19
+
+### Fixes
+
+- fixed api url for health (9ef1ae689067f3718dbdca43a6ab9acb4ee6724b)
+
 ## 1.0.1
 2024-02-19
 
