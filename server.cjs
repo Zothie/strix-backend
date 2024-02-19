@@ -85,11 +85,6 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// Регистрация нового пользователя
-app.post('/api/currentVersion', async (req, res) => {
-  res.status(200).json({ message: 'Current Version is 1.0.3' });
-});
-
 // Аутентификация пользователя
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
@@ -6597,7 +6592,7 @@ app.post('/api/testFunc', async (req, res) => {
 });
 
 app.get('/api/health', async (req, res, next) => {
-  res.json({health: 'ok'});
+  res.json({health: 'OK.', message: 'Current Version is 1.0.5'});
 });
 
 const server = http.createServer(app);
