@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.7
+2024-02-19
+
+### Fixes
+
+- Health check .env version (fd5ff069dabd158128112aa9f5d2e8cdd277443a)
+
 ## 1.0.6
 2024-02-19
 
