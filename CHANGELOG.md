@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.6
+2024-02-19
+
+### Fixes
+
+- auth0 jwt WIP (b823f3c1f9693f1bb8d3e0ea3c9e5516f727b286)
+
 ## 1.0.5
 2024-02-19
 
