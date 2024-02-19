@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.5
+2024-02-19
+
+### Fixes
+
+- health API (fa42e8fe183bed114fafe41e4aea21998f78a357)
+
 ## 1.0.4
 2024-02-19
 
