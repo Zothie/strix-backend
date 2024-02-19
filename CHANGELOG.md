@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.4
+2024-02-19
+
+### Fixes
+
+- Version API call (76b0def6f1446ad1db396e1dd2b32510ccbfe96a)
+
 ## 1.0.3
 2024-02-19
 
