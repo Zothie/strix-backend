@@ -85,6 +85,11 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+// Регистрация нового пользователя
+app.post('/api/currentVersion', async (req, res) => {
+  res.status(200).json({ message: 'Current Version is 1.0.3' });
+});
+
 // Аутентификация пользователя
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
