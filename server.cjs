@@ -6593,7 +6593,7 @@ app.post('/api/testFunc', async (req, res) => {
   // res.status(200).json({success: true, message: response})
 });
 
-app.get('/health', async (req, res, next) => {
+app.get('/api/health', async (req, res, next) => {
   res.json({health: 'ok'});
 });
 
