@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.3
+2024-02-19
+
+### Fixes
+
+- removed unneeded lines (840a9ecdd2fbed93a85178b493671072be3946c9)
+
 ## 1.0.2
 2024-02-19
 
