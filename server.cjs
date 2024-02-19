@@ -48,6 +48,20 @@ mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true });
 app.use(bodyParser.json());
 
 
+//
+// JWT
+// 
+const jwtCheck = auth({
+  audience: 'https://strix-staging.a1e.dev/api/',
+  issuerBaseURL: 'https://dev-quepxwp1liibnw4a.us.auth0.com/',
+  tokenSigningAlg: 'RS256'
+});
+app.use(jwtCheck);
+app.get('/authorized', function (req, res) {
+  res.send('Secured Resource');
+});
+
+
 // CORS
 const whitelist = `${process.env.CORS_WHITELIST}`.split(',');
 const corsOptions = {
