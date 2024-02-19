@@ -6606,7 +6606,7 @@ app.post('/api/testFunc', async (req, res) => {
 });
 
 app.get('/api/health', async (req, res, next) => {
-  res.json({health: 'OK.', message: 'Current Version is 1.0.5'});
+  res.json({health: 'OK.', message: `Current Version is ${process.env.CURRENT_VERSION}`});
 });
 
 const server = http.createServer(app);
