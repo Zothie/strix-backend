@@ -1,0 +1,239 @@
+# TEMPLATE GITLAB CI + REACT + DOCKER + NODE + GCP CONTAINER REGISTRY
+image: docker:latest
+variables:
+  GSG_INITIAL_DEVELOPMENT: "false" #https://juhani.gitlab.io/go-semrel-gitlab/stop-initial/
+  GIT_LFS_SKIP_SMUDGE: "1"
+  TEST_IMAGE: latest-$CI_COMMIT_REF_NAME
+  DEPLOYMENT_HOST: 192.168.0.50
+  PACKAGE_REGISTRY_URL: $CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/$CI_PROJECT_NAME
+  DEPLOYMENT_HOST_FOLDER: strix-backend-$CI_COMMIT_REF_NAME
+  REGISTRY_HUB: europe-west6-docker.pkg.dev/strix-414312
+  DOCKERFILE_FOLDER: ./
+
+stages:
+  #- test
+  #- testAllContentPages
+  - version
+  - build
+  - deploy
+  - release
+
+#test:
+#  image: node:20
+#  stage: test
+#  before_script:
+#    - node -v
+#    - npm -v
+#    - npm ci
+#  script:
+#    - npm run lint
+#    - npm run stylelint
+#    - npm run test
+#  tags:
+#    - web-test
+#
+#npmaudit:
+#  image: node:20-alpine
+#  stage: test
+#  before_script:
+#    - node -v
+#    - npm -v
+#    - npm ci
+#  script:
+#    - npx audit-ci --high
+#  allow_failure: true
+#  only:
+#    - merge_requests
+#  tags:
+#    - web-dev
+#
+#composeraudit:
+#  image: SEC CHECKER IMAGE
+#  stage: test
+#  script:
+#    - local-php-security-checker
+#  allow_failure: true
+#  only:
+#    - merge_requests
+#  tags:
+#    - web-dev
+#
+#phpunit:
+#  image: UNIT TEST IMAGE
+#  stage: test
+#  before_script:
+#    - composer install
+#  script:
+#    - cp .env.example .env
+#    - php artisan key:generate
+#    - touch database/database.sqlite
+#    - echo "" >> .env && echo "DB_CONNECTION=sqlite" >> .env
+#    - php artisan migrate --no-interaction
+#    - php vendor/bin/phpunit --exclude-group allPages
+#  tags:
+#    - web-test
+#
+#testAllContentPages:
+#  image: TEST CONTENT
+#  stage: testAllContentPages
+#  before_script:
+#    - composer install
+#  script:
+#    - cp .env.example .env
+#    - php artisan key:generate
+#    - touch database/database.sqlite
+#    - echo "" >> .env && echo "DB_CONNECTION=sqlite" >> .env
+#    - php artisan migrate --no-interaction
+#    - php vendor/bin/phpunit --group allPages
+#  when: manual
+#  tags:
+#    - web-test
+
+version-rc:
+  stage: version
+  image: registry.gitlab.com/juhani/go-semrel-gitlab:v0.21.1
+  script:
+    - ls
+    - RELEASE_VERSION=$(release next-version --allow-current)
+    - RELEASE_CANDIDATE_VERSION=$RELEASE_VERSION-${CI_COMMIT_SHA:0:8}
+    - echo $RELEASE_VERSION > .next-version
+    - echo $RELEASE_CANDIDATE_VERSION > .current-rc-version
+    - cat .next-version && cat .current-rc-version
+    - release changelog CHANGELOG.md
+    - cat CHANGELOG.md
+    - RELEASE_URL=$CI_API_V4_URL/projects/$CI_PROJECT_ID/jobs/$CI_JOB_ID/artifacts/release
+    - echo $RELEASE_URL
+    - release commit-and-tag CHANGELOG.md .current-rc-version .next-version
+    # - release --ci-commit-tag v$RELEASE_VERSION add-download-link -n release -u $RELEASE_URL -d "description"
+  artifacts:
+    paths:
+      - CHANGELOG.md
+      - .next-version
+      - .current-rc-version
+  tags:
+    - web-dev
+  only:
+    - main
+  allow_failure: false
+  needs: []
+  except:
+    - tags
+
+#build-and-push-rc-package:
+#  stage: build
+#  image: node:20.10.0
+#  dependencies:
+#    - version-rc
+#  before_script:
+#    - npm install --prefix app/
+#  script:
+#    - RELEASE_CANDIDATE_VERSION=$(cat .current-rc-version)
+#    - mkdir out && cp docker-compose-testing.yml out/docker-compose.yml
+#    - cd app
+#    - npm run build
+#    - PACKAGE_FILE_NAME=static_build.tar.gz
+#    - tar -zcvf $PACKAGE_FILE_NAME build
+#    - echo $PACKAGE_REGISTRY_URL
+#    # push latest
+#    - curl --header "JOB-TOKEN:$CI_JOB_TOKEN" --upload-file $PACKAGE_FILE_NAME "$PACKAGE_REGISTRY_URL/$TEST_IMAGE/$TEST_IMAGE.tar.gz"
+#    # push release candidate
+#    - curl --header "JOB-TOKEN:$CI_JOB_TOKEN" --upload-file $PACKAGE_FILE_NAME "$PACKAGE_REGISTRY_URL/$RELEASE_CANDIDATE_VERSION/$RELEASE_CANDIDATE_VERSION.tar.gz"
+#  only:
+#    - main
+#    - version2 #check this
+#  tags:
+#    - web-dev
+#  artifacts:
+#    paths:
+#      - out/
+
+build-and-push-rc-container:
+  stage: build
+  dependencies:
+    - version-rc
+  before_script:
+    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
+  script:
+    - RELEASE_CANDIDATE_VERSION=$(cat .current-rc-version)
+    - mkdir out
+    - cp docker-compose-testing.yml  out/docker-compose.yml
+    - sed -i -e "s#%IMAGE%#$CI_REGISTRY/$CI_PROJECT_PATH:$TEST_IMAGE#g" out/docker-compose.yml
+    # build and push as release candidate
+    - docker build --pull --rm -t $CI_REGISTRY/$CI_PROJECT_PATH:$RELEASE_CANDIDATE_VERSION $DOCKERFILE_FOLDER
+    - docker push $CI_REGISTRY/$CI_PROJECT_PATH:$RELEASE_CANDIDATE_VERSION
+    # tag and push as latest
+    - docker tag $CI_REGISTRY/$CI_PROJECT_PATH:$RELEASE_CANDIDATE_VERSION $CI_REGISTRY/$CI_PROJECT_PATH:$TEST_IMAGE
+    - docker push $CI_REGISTRY/$CI_PROJECT_PATH:$TEST_IMAGE
+  only:
+    - main
+    - version2 #check this
+  tags:
+    - web-dev
+  artifacts:
+    paths:
+      - out/
+
+#deploy-to-test:
+#  image: ruby:2.5
+#  stage: deploy
+#  variables:
+#    GIT_STRATEGY: none
+#  environment:
+#    name: test
+#    url: https://YOUR_URL
+#  before_script:
+#    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+#    - eval $(ssh-agent -s)
+#    - echo "$GITLAB_CI_SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+#    - mkdir -p ~/.ssh
+#    - chmod 700 ~/.ssh
+#    - ssh-keyscan $DEPLOYMENT_HOST >> ~/.ssh/known_hosts
+#    - chmod 644 ~/.ssh/known_hosts
+#  script:
+#    - echo "Deploying $TEST_IMAGE to testing on $DEPLOYMENT_HOST"
+#    #- wget --header="JOB-TOKEN:$CI_JOB_TOKEN" $PACKAGE_REGISTRY_URL/$TEST_IMAGE/$TEST_IMAGE.tar.gz
+#    #- scp $TEST_IMAGE.tar.gz gitlab-ci@$DEPLOYMENT_HOST:~/apps/$DEPLOYMENT_HOST_FOLDER/$TEST_IMAGE.tar.gz
+#    - cd out/
+#    - cat docker-compose.yml
+#    - scp docker-compose.yml gitlab-ci@$DEPLOYMENT_HOST:~/apps/$DEPLOYMENT_HOST_FOLDER/docker-compose.yml
+#    - ssh gitlab-ci@$DEPLOYMENT_HOST "cd ~/apps/$DEPLOYMENT_HOST_FOLDER/
+#      && echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" "$CI_REGISTRY" --password-stdin
+#      && docker-compose -f docker-compose.yml pull
+#      && docker-compose -f docker-compose.yml down --remove-orphans
+#      && docker-compose -f docker-compose.yml up -d"
+#  dependencies:
+#    - build-and-push-rc-container
+#  needs:
+#    - build-and-push-rc-container
+#  tags:
+#    - web-dev
+#  only:
+#    - main
+#    - version2 #check this
+
+push_release_container:
+  stage: release
+  before_script:
+    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
+    - echo $HUB_PASSWORD > account.json
+    - docker login -u $HUB_USERNAME --password-stdin $REGISTRY_HUB < account.json
+  script:
+    - RELEASE_VERSION=$(cat .next-version)
+    - RELEASE_CANDIDATE_VERSION=$(cat .current-rc-version)
+    - echo "Release Candidate Version ${RELEASE_CANDIDATE_VERSION} -> Release Version ${RELEASE_VERSION}"
+    # pick release candidate for release
+    - docker pull $CI_REGISTRY/$CI_PROJECT_PATH:$RELEASE_CANDIDATE_VERSION
+    - docker tag $CI_REGISTRY/$CI_PROJECT_PATH:$RELEASE_CANDIDATE_VERSION $REGISTRY_HUB/$CI_PROJECT_PATH:$RELEASE_VERSION
+    - docker push $REGISTRY_HUB/$CI_PROJECT_PATH:$RELEASE_VERSION
+    #version widget
+    - cp .next-version PROD-VERSION.txt
+    - wget -O version-widget.svg https://img.shields.io/badge/Release-$RELEASE_VERSION-green.svg
+  tags:
+    - web-dev
+  only:
+    - main
+  when: manual
+  artifacts:
+    paths:
+      - PROD-VERSION.txt
+      - version-widget.svg
