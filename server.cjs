@@ -53,8 +53,8 @@ app.use(bodyParser.json());
 // 
 const { auth } = require('express-oauth2-jwt-bearer');
 const jwtCheck = auth({
-  audience: 'https://strix-staging.a1e.dev/api/',
-  issuerBaseURL: 'https://dev-quepxwp1liibnw4a.us.auth0.com/',
+  audience: process.env.AUTH0_AUDIENCE,
+  issuerBaseURL: process.env.AUTH0_DOMAIN,
   tokenSigningAlg: 'RS256'
 });
 app.use(jwtCheck);
