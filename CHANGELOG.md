@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.9
+2024-02-20
+
+### Fixes
+
+- Added JWT check env vars (322a0dafb47cdd599f48b0ae78768e9dcb3ab39d)
+
 ## 1.0.8
 2024-02-19
 
