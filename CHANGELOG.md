@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.8
+2024-02-19
+
+### Fixes
+
+- Added jwt package (d58d02c55c8fe943d20358ad214dd2709ae689f2)
+
 ## 1.0.7
 2024-02-19
 
