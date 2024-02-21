@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.11
+2024-02-21
+
+### Fixes
+
+- added druid connection to env (1732129f78eba45b998bc0ec51f627f3da2d4410)
+
 ## 1.0.10
 2024-02-21
 
