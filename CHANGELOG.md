@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.10
+2024-02-21
+
+### Fixes
+
+- Added FB, removed auth0 (c9b0de2f9f3614289015076ab4dc0844246839af)
+
 ## 1.0.9
 2024-02-20
 
