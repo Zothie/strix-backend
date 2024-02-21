@@ -44,23 +44,12 @@ const playerWarehouseLib = require('./playerWarehouseLib.cjs')
 mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 
+// const { initializeApp } = require('firebase-admin/app');
+// const fb_app = initializeApp();
+
 
 app.use(bodyParser.json());
 
-
-//
-// JWT
-// 
-const { auth } = require('express-oauth2-jwt-bearer');
-const jwtCheck = auth({
-  audience: process.env.AUTH0_AUDIENCE,
-  issuerBaseURL: process.env.AUTH0_DOMAIN,
-  tokenSigningAlg: 'RS256'
-});
-app.use(jwtCheck);
-app.get('/authorized', function (req, res) {
-  res.send('Secured Resource');
-});
 
 
 // CORS
