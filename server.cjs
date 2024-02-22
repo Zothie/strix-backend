@@ -44,12 +44,30 @@ const playerWarehouseLib = require('./playerWarehouseLib.cjs')
 mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 
-// const { initializeApp } = require('firebase-admin/app');
-// const fb_app = initializeApp();
-
+// Firebase
+const admin = require('firebase-admin');
+//  Admin SDK config
+const firebaseCredentials = {  
+  type: `${process.env.FB_ASDK_TYPE}`,
+  project_id: `${process.env.FB_ASDK_PROJECT_ID}`,
+  private_key_id: `${process.env.FB_ASDK_PROJECT_KEY_ID}`,
+  private_key: `${formatPrivateKey(process.env.FB_ASDK_PRIVATE_KEY)}`,
+  client_email: `${process.env.FB_ASDK_CLIENT_EMAIL}`,
+  client_id: `${process.env.FB_ASDK_CLIENT_ID}`,
+  auth_uri: `${process.env.FB_ASDK_AUTH_URI}`,
+  token_uri: `${process.env.FB_ASDK_TOKEN_URI}`,
+  auth_provider_x509_cert_url: `${process.env.FB_ASDK_AUTH_PROVIDER}`,
+  client_x509_cert_url: `${process.env.FB_ASDK_CLIENT_CERT}`,
+  universe_domain: `${process.env.FB_ASDK_UNIVERSE_DOMAIN}`,
+};
+admin.initializeApp({
+  credential: admin.credential.cert(firebaseCredentials)
+});
+function formatPrivateKey(key) {
+    return key.replace(/\\n/g, "\n")
+}
 
 app.use(bodyParser.json());
-
 
 
 // CORS
@@ -70,22 +88,30 @@ app.use(cors(corsOptions));
 
 // Регистрация нового пользователя
 app.post('/api/register', async (req, res) => {
-  const { user, email, password } = req.body;
+  const { username, email, password } = req.body;
 
   try {
+
     // Проверяем, существует ли пользователь с таким именем
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ message: 'Пользователь с таким Email уже существует' });
+      return res.status(400).json({ success: false, message: 'Email is already registered' });
     }
     // Создаем нового пользователя
-    const newUser = new User({ user, email, password });
+    const newUser = new User({ username, email, password });
+    // await newUser.save();
 
-    await newUser.save();
-    res.status(201).json({ message: 'Пользователь успешно зарегистрирован' });
+    admin.auth()
+      // Serve email as uid
+      .createCustomToken(email)
+      .then((customToken) => {
+        // Send token back to client
+        res.status(201).json({ success: true, token: customToken });
+      })
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Ошибка при регистрации пользователя' });
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 });
 
@@ -98,33 +124,20 @@ app.post('/api/login', async (req, res) => {
     console.log( user ? `User found by email` : 'User not found');
 
     if (user) {
+      console.log('User:', user, user.password)
       const isPasswordMatch = password === user.password;
       console.log('Comparing result: ', isPasswordMatch, '. Compared ', password, ' and ', user.password);
 
-      // if (isPasswordMatch) {
       if (isPasswordMatch) {
 
+        admin.auth()
+        // Serve email as uid
+        .createCustomToken(email)
+        .then((customToken) => {
+          // Send token back to client
+          res.status(200).json({ success: true, token: customToken });
+        })
 
-        const login = (credentials) => {
-          // Ваша логика аутентификации здесь, например, проверка ваших данных в базе данных
-
-          // Здесь создается пример токена
-          const token = jwt.sign({ userId: 'your-user-id' }, secretKey, { expiresIn: '1h' });
-
-          return {
-            success: true,
-            token,
-            expiresIn: 3600, // Время в секундах, на которое действителен токен
-            authUserState: 'your-auth-user-state',
-            // refreshToken: 'your-refresh-token',
-            // refreshTokenExpireIn: 86400, // Пример: refreshToken действителен 24 часа
-          };
-        };
-
-        // Пароль верен, генерируем JWT и отправляем клиенту
-        const response = login({email, password})
-        // token = jwt.sign({ email }, secretKey, { expiresIn: '100h' });
-        res.status(200).json(response);
       } else {
         res.status(401).json({ message: 'Неверное имя пользователя или пароль' });
       }
@@ -135,6 +148,32 @@ app.post('/api/login', async (req, res) => {
     console.error(error);
     res.status(500).json({ message: 'Ошибка при аутентификации' });
   }
+});
+
+// Logout/signout/token revoke
+app.post('/api/logout', async (req, res) => {
+  const { token } = req.body;
+
+ admin.auth().verifyIdToken(token)
+ .then((decodedToken) => {
+   // Verify user after verifying token
+   const uid = decodedToken.uid;
+
+   // Force revoke user
+   admin.auth().revokeRefreshTokens(uid)
+     .then(() => {
+       res.status(200).send('User logged out successfully');
+     })
+     .catch((error) => {
+       console.error('Error revoking refresh tokens:', error);
+       res.status(500).send('Error logging out user');
+     });
+ })
+ .catch((error) => {
+   // Обработка ошибок верификации токена
+   console.error('Error verifying token:', error);
+   res.status(401).send('Invalid or expired token');
+ });
 });
 
 // Добавление нового паблишера, назначение создателя всеми правами на свете
@@ -185,7 +224,6 @@ app.post('/api/getPublishers', async (req, res) => {
 
   // Найдите пользователя по email
   const user = await User.findOne({ email });
-  console.log(user ? `User found by email` : 'User not found');
 
   if (!user) {
     return res.status(200).json({ success: false, error: 'User not found' });
@@ -195,8 +233,7 @@ app.post('/api/getPublishers', async (req, res) => {
     {
       'users.userID': user.email,
     },
-    // Выбирайте только нужные поля (publisherID и publisherName)
-    'publisherID publisherName -_id'  // С указанием "-_id" исключите _id из результата
+    'publisherID publisherName -_id'
   );
 
   res.json({success: true, publishers});
