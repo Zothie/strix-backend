@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.12
+2024-02-22
+
+### Fixes
+
+- Firebase Admin SDK added (a42016f0a33614159c2db0337b2f09849aa6f750)
+
 ## 1.0.11
 2024-02-21
 
