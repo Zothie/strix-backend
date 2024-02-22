@@ -1,24 +1,24 @@
-const fetch = require('node-fetch'); 
+const fetch = require('node-fetch');
 const moment = require('moment');
 const dayjs = require('dayjs');
 var utc = require('dayjs/plugin/utc')
 dayjs.extend(utc)
 
 
-const druidURL = 'http://192.168.243.128:8082/druid/v2/?pretty'
+const druidURL = `${process.env.DRUID_BROKER}`
 
-// 
+//
 // Player Warehouse management
-// 
+//
 
 // Get all clientIDs for the last month and recalculate all their segments
 async function getRecentClientIDs(gameID, buildType) {
-    
+
     const endDate = moment().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'); // Today
     const startDate = moment().subtract(1, 'month').format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'); // Today minus month
 
     const interval = `${startDate}/${endDate}`;
-    
+
 
     const query = {
         "queryType": "timeseries",
@@ -89,7 +89,7 @@ async function getRecentClientIDs(gameID, buildType) {
 
 // Getting the latest or the earliest value of given event in Druid records
 async function getMostRecentValue(gameID, buildType, clientID, eventType, eventID, valueColumn) {
-  
+
   const query = {
     "queryType": "timeseries",
     "dataSource": {
@@ -246,7 +246,7 @@ async function getFirstEventValue(gameID, buildType, clientID, eventType, eventI
 
 // Finding an array of the most common values in given events.
 async function getMostCommonValue(gameID, buildType, clientID, eventType, eventID, targetValue) {
-    
+
     const query = {
         "queryType": "topN",
         "dataSource": {
@@ -334,10 +334,10 @@ async function getMostCommonValue(gameID, buildType, clientID, eventType, eventI
             if (arr.length === 0) {
               return [];
             }
-          
+
             const maxCount = arr[0].a0;
             const result = [];
-          
+
             for (const item of arr) {
               if (item.a0 === maxCount) {
                 result.push(item.d0);
@@ -347,7 +347,7 @@ async function getMostCommonValue(gameID, buildType, clientID, eventType, eventI
                 break;
               }
             }
-          
+
             return result;
         }
 
@@ -361,7 +361,7 @@ async function getMostCommonValue(gameID, buildType, clientID, eventType, eventI
 
 // Finding an array of the least common values in given events.
 async function getLeastCommonValue(gameID, buildType, clientID, eventType, eventID, targetValue) {
-    
+
     const query = {
         "queryType": "topN",
         "dataSource": {
@@ -447,15 +447,15 @@ async function getLeastCommonValue(gameID, buildType, clientID, eventType, event
             headers: { 'Content-Type': 'application/json' }
         });
         const data = await response.json();
-        
+
         function findLeastFrequentNumbers(arr) {
             if (arr.length === 0) {
               return [];
             }
-          
+
             const minCount = arr[0].a0;
             const result = [];
-          
+
             for (const item of arr) {
               if (item.a0 === minCount) {
                 result.push(item.d0);
@@ -465,7 +465,7 @@ async function getLeastCommonValue(gameID, buildType, clientID, eventType, event
                 break;
               }
             }
-          
+
             return result;
         }
         const cleanedResult = findLeastFrequentNumbers(data[0].result)
@@ -478,7 +478,7 @@ async function getLeastCommonValue(gameID, buildType, clientID, eventType, event
 
 // Finding median average with druid-median-extension
 async function getMeanValue(gameID, buildType, clientID, eventType, eventID, targetValue, isFloat) {
-    
+
 
     const query = {
         "queryType": "timeseries",
@@ -564,7 +564,7 @@ async function getMeanValue(gameID, buildType, clientID, eventType, eventID, tar
         let result
 
         if (isFloat) {
-            result = data[0].result.a0.toFixed(2)   
+            result = data[0].result.a0.toFixed(2)
         } else {
             result = parseInt(data[0].result.a0)
         }
@@ -575,7 +575,7 @@ async function getMeanValue(gameID, buildType, clientID, eventType, eventID, tar
     }
 };
 async function getMeanValueForTime(gameID, buildType, clientID, eventType, eventID, targetValue, isFloat, days) {
-    
+
     // Dont mind if I do
     let sanitizedDays = days
     if (days === '' || days === null || days === undefined || days === 0) {
@@ -674,7 +674,7 @@ async function getMeanValueForTime(gameID, buildType, clientID, eventType, event
         let result
 
         if (isFloat) {
-            result = data[0].result.a0.toFixed(2)  
+            result = data[0].result.a0.toFixed(2)
         } else {
             result = parseInt(data[0].result.a0)
         }
@@ -687,8 +687,8 @@ async function getMeanValueForTime(gameID, buildType, clientID, eventType, event
 
 // Finding summ of a given event
 async function getSummValue(gameID, buildType, clientID, eventType, eventID, targetValue, isFloat) {
-    
-    
+
+
     const query = {
         "queryType": "timeseries",
         "dataSource": {
@@ -773,7 +773,7 @@ async function getSummValue(gameID, buildType, clientID, eventType, eventID, tar
         let result
 
         if (isFloat) {
-            result = data[0].result.a0.toFixed(2)   
+            result = data[0].result.a0.toFixed(2)
         } else {
             result = parseInt(data[0].result.a0)
         }
@@ -784,7 +784,7 @@ async function getSummValue(gameID, buildType, clientID, eventType, eventID, tar
     }
 };
 async function getSummValueForTime(gameID, buildType, clientID, eventType, eventID, targetValue, isFloat, days) {
-    
+
     // Dont mind if I do
     let sanitizedDays = days
     if (days === '' || days === null || days === undefined || days === 0) {
@@ -797,7 +797,7 @@ async function getSummValueForTime(gameID, buildType, clientID, eventType, event
 
 
     const interval = `${startDate}/${endDate}`;
-    
+
     const query = {
         "queryType": "timeseries",
         "dataSource": {
@@ -882,7 +882,7 @@ async function getSummValueForTime(gameID, buildType, clientID, eventType, event
         let result
 
         if (isFloat) {
-            result = data[0].result.a0.toFixed(2)   
+            result = data[0].result.a0.toFixed(2)
         } else {
             result = parseInt(data[0].result.a0)
         }
@@ -983,7 +983,7 @@ async function getEventNumber(gameID, buildType, clientID, eventType, eventID, v
 }
 // Finding number of events by given criteria for a given last N days
 async function getNumberOfEventsForTime(gameID, buildType, clientID, eventType, eventID, days) {
-    
+
     // Dont mind if I do
     let sanitizedDays = days
     if (days === '' || days === null || days === undefined || days === 0) {
@@ -996,7 +996,7 @@ async function getNumberOfEventsForTime(gameID, buildType, clientID, eventType, 
 
 
     const interval = `${startDate}/${endDate}`;
-    
+
     const query = {
         "queryType": "timeseries",
         "dataSource": {
@@ -1068,7 +1068,7 @@ async function getNumberOfEventsForTime(gameID, buildType, clientID, eventType, 
             headers: { 'Content-Type': 'application/json' }
         });
         const data = await response.json();
-        
+
         let result = data[0].result.a0
 
         return result;
@@ -1080,9 +1080,9 @@ async function getNumberOfEventsForTime(gameID, buildType, clientID, eventType, 
 
 
 
-// 
+//
 // Analytics
-// 
+//
 function getGranularity(dateDiff) {
   if (dateDiff <= 1) {
     return 'minute'
@@ -1093,9 +1093,9 @@ function getGranularity(dateDiff) {
   }
 }
 
-// 
+//
 // Analytics Dashboard - General
-// 
+//
 // New Users for the given time
 async function getNewUsers(gameID, buildType, startDate, endDate, dateDiff, clientIDs) {
   function makeFilters() {
@@ -1119,7 +1119,7 @@ async function getNewUsers(gameID, buildType, startDate, endDate, dateDiff, clie
             "matchValue": "true"
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -1134,7 +1134,7 @@ async function getNewUsers(gameID, buildType, startDate, endDate, dateDiff, clie
   const intervalStartDate = startDate.toISOString()
   const intervalEndDate = endDate.toISOString()
   const daysBetweenDates = dateDiff;
-  
+
     // Minutes by default if we're looking in range below 7 days
     let granularity = 'minute';
     granularity = getGranularity(daysBetweenDates);
@@ -1174,11 +1174,11 @@ async function getNewUsers(gameID, buildType, startDate, endDate, dateDiff, clie
         });
         const data = await response.json();
 
-        
+
         if (data.error !== undefined) {
             return {success: false, error: data.error}
         }
-        
+
         const cleanedData = data.map(item => ({
           timestamp: item.timestamp,
           value: item.event.count
@@ -1209,7 +1209,7 @@ async function getDAU(gameID, buildType, startDate, endDate, dateDiff, clientIDs
             "matchValue": buildType
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -1224,13 +1224,13 @@ async function getDAU(gameID, buildType, startDate, endDate, dateDiff, clientIDs
   const intervalStartDate = startDate.toISOString()
   const intervalEndDate = endDate.toISOString()
   const daysBetweenDates = dateDiff;
-  
+
     // Minutes by default if we're looking in range below 7 days
     let granularity = 'minute';
     granularity = getGranularity(daysBetweenDates);
 
     const interval = `${intervalStartDate}/${intervalEndDate}`;
-    
+
     const query = {
         "queryType": "topN",
         "dataSource": {
@@ -1288,7 +1288,7 @@ async function getDAU(gameID, buildType, startDate, endDate, dateDiff, clientIDs
         if (data.length === 0) {
           return {success: false, error: 'No Data returned'}
         }
-        
+
         // Since Druid's granularity won't work for us and break things, we need to keep Druid's granularity as "all"
         // and process users on our own, rounding results to minutes/hours/days.
         // If we set any other type of granularity in Druid's granularity in query, it will return
@@ -1300,26 +1300,26 @@ async function getDAU(gameID, buildType, startDate, endDate, dateDiff, clientIDs
           data.forEach((entry) => {
             const timestamp = entry.timestamp;
             const roundedTime = roundTime(timestamp, timeUnit);
-        
+
             if (!counts[roundedTime]) {
               counts[roundedTime] = new Set();
             }
-        
+
             counts[roundedTime].add(entry.clientID);
           });
-        
+
           const result = Object.keys(counts).map((key) => ({
             timestamp: Number(key),
             count: counts[key].size,
           }));
-        
+
           return result;
         }
-        
+
         // Here we round raw timestamp to a minute, hour or day
         function roundTime(timestamp, timeUnit) {
           const date = new Date(timestamp);
-        
+
           if (timeUnit === 'minute') {
             date.setSeconds(0, 0);
           } else if (timeUnit === 'hour') {
@@ -1327,7 +1327,7 @@ async function getDAU(gameID, buildType, startDate, endDate, dateDiff, clientIDs
           } else if (timeUnit === 'day') {
             date.setHours(0, 0, 0, 0);
           }
-          
+
           return date.getTime();
         }
 
@@ -1336,7 +1336,7 @@ async function getDAU(gameID, buildType, startDate, endDate, dateDiff, clientIDs
           timestamp: new Date(item.timestamp),
           value: item.count
         }));
-        
+
       return {success: true, data: cleanedData, granularity}
 
     } catch (error) {
@@ -1361,7 +1361,7 @@ async function getRevenue(gameID, buildType, startDate, endDate, dateDiff, clien
             "matchValue": buildType
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -1376,13 +1376,13 @@ async function getRevenue(gameID, buildType, startDate, endDate, dateDiff, clien
   const intervalStartDate = startDate.toISOString()
   const intervalEndDate = endDate.toISOString()
   const daysBetweenDates = dateDiff;
-  
+
     // Minutes by default if we're looking in range below 7 days
     let granularity = 'minute';
     granularity = getGranularity(daysBetweenDates);
 
     const interval = `${intervalStartDate}/${intervalEndDate}`;
-    
+
     const query = {
         "queryType": "groupBy",
         "dataSource": {
@@ -1426,13 +1426,13 @@ async function getRevenue(gameID, buildType, startDate, endDate, dateDiff, clien
         if (data.length === 0) {
           return {success: false, error: 'No Data returned'}
         }
-        
-        
+
+
         const cleanedData = data.map(item => ({
           timestamp: item.timestamp,
           value: item.event.total_revenue.toFixed(2)
         }));
-        
+
 
       return {success: true, data: cleanedData, granularity}
 
@@ -1464,7 +1464,7 @@ async function getRetention(gameID, buildType, startDate, endDate, dateDiff, cli
             "matchValue": "true"
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -1479,13 +1479,13 @@ async function getRetention(gameID, buildType, startDate, endDate, dateDiff, cli
   const intervalStartDate = startDate.toISOString()
   const intervalEndDate = endDate.toISOString()
   const daysBetweenDates = Math.round(dateDiff);
-  
+
     // Minutes by default if we're looking in range below 7 days
     let granularity = 'minute';
     granularity = getGranularity(daysBetweenDates);
 
     const interval = `${intervalStartDate}/${intervalEndDate}`;
-    
+
     // Query for new users in given interval. Use them later to query retention for each clientID
     const query = {
         "queryType": "topN",
@@ -1530,7 +1530,7 @@ async function getRetention(gameID, buildType, startDate, endDate, dateDiff, cli
         });
         const data = await response.json();
 
-        
+
         if (data.error !== undefined) {
             return {success: false, error: data.error}
         }
@@ -1539,7 +1539,7 @@ async function getRetention(gameID, buildType, startDate, endDate, dateDiff, cli
         // Getting an array of new clients for a given time interval. We later use it to calculate retention for each one
         const newClients = data[0].result.map((obj) => obj.clientID);
 
-        
+
 
         let clientSessions = newClients.map(clientID => ({ clientID, days: [] }));
 
@@ -1557,10 +1557,10 @@ async function getRetention(gameID, buildType, startDate, endDate, dateDiff, cli
           const date = dayjs.utc(startDate).add(i + retentionStartDayOffset, 'day').hour(0).minute(0).second(0).millisecond(0).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
           const endDate = dayjs.utc(startDate).add(i + retentionStartDayOffset, 'day').hour(23).minute(59).second(59).millisecond(999).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
 
-      
+
           // Query to get if given clientIDs called New Session event given day.
           // Returns an array of objects and true/false value
-          const checkDayRetentionQuery = 
+          const checkDayRetentionQuery =
         {
           "queryType": "topN",
           "dataSource": {
@@ -1602,7 +1602,7 @@ async function getRetention(gameID, buildType, startDate, endDate, dateDiff, cli
               "matchValue": buildType
             },
             {
-            
+
               "type": "in",
               "dimension": "clientID",
               "values": newClients
@@ -1627,7 +1627,7 @@ async function getRetention(gameID, buildType, startDate, endDate, dateDiff, cli
             }
           ]
           }
-      
+
           try {
             const response = await fetch(druidURL, {
               method: 'POST',
@@ -1641,7 +1641,7 @@ async function getRetention(gameID, buildType, startDate, endDate, dateDiff, cli
             }
 
             if (data.length === 0) continue
-            
+
             // Add corresponding day to an array, if client were there
             data[0].result.forEach(result => {
               if (result === undefined) return
@@ -1652,29 +1652,29 @@ async function getRetention(gameID, buildType, startDate, endDate, dateDiff, cli
                 client.days.push(endDate);
               }
             });
-      
+
           } catch (error) {
             console.error('Error fetching data:', error);
           }
         }
-        
+
 
         // Calculate retention days for all users.
         // Turning i.e. [12-12-2023, 13-12-2023, 14-12-2023] to [0, 1, 2]
         clientSessions.forEach(client => {
           // Convert dates to dayjs objects and sort
           let sortedDates = client.days.map(day => dayjs.utc(day)).sort((a, b) => a - b);
-        
+
           // Calculate retention days
           client.days = sortedDates.map(date => date.diff(sortedDates[0], 'day'));
         });
-        
+
         // Summ up all retention values and count how many users are there for Day0, Day1 etc
         const resultRetention = Array.from({ length: 29 }, (_, i) => ({
           day: i,
           retentionCount: clientSessions.reduce((total, obj) => total + obj.days.filter(day => day === i).length, 0)
         }));
-      
+
 
       return {success: true, data: resultRetention, granularity}
 
@@ -1700,7 +1700,7 @@ async function getARPDAU(gameID, buildType, startDate, endDate, dateDiff, client
             "matchValue": buildType
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -1715,7 +1715,7 @@ async function getARPDAU(gameID, buildType, startDate, endDate, dateDiff, client
   const intervalStartDate = startDate.toISOString()
   const intervalEndDate = endDate.toISOString()
   const daysBetweenDates = dateDiff;
-  
+
     // Minutes by default if we're looking in range below 7 days
     let granularity = 'minute';
     granularity = getGranularity(daysBetweenDates);
@@ -1762,8 +1762,8 @@ async function getARPDAU(gameID, buildType, startDate, endDate, dateDiff, client
             headers: { 'Content-Type': 'application/json' }
         });
         const data = await response.json();
-        
-        
+
+
 
         if (data.error !== undefined) {
             return {success: false, error: data.error}
@@ -1775,7 +1775,7 @@ async function getARPDAU(gameID, buildType, startDate, endDate, dateDiff, client
         // Calculate ARPU per day
         async function processUserData(data) {
           const results = [];
-        
+
           for (const item of data) {
 
             const activeUsers = item.result.map((item) => item.clientID);
@@ -1826,13 +1826,13 @@ async function getARPDAU(gameID, buildType, startDate, endDate, dateDiff, client
           }
             }
 
-           
+
             const revenuePerUserResponse = await fetch(druidURL, {
               method: 'POST',
               body: JSON.stringify(revenuePerUser),
               headers: { 'Content-Type': 'application/json' },
             });
-        
+
             const revenuePerUserData = await revenuePerUserResponse.json();
 
             if (revenuePerUserData.error !== undefined) {
@@ -1845,27 +1845,27 @@ async function getARPDAU(gameID, buildType, startDate, endDate, dateDiff, client
                 clientID: item.event.clientID,
                 value: item.event.total_revenue.toFixed(2),
               }));
-        
+
               activeUsers.forEach((clientID) => {
                 if (!cleanedRPUData.some((client) => client.clientID === clientID)) {
                   cleanedRPUData.push({ clientID: clientID, value: '0.00' });
                 }
               });
-        
+
               const revenues = cleanedRPUData.map((client) => parseFloat(client.value));
               const medianRevenue = findAverage(revenues).toFixed(2);
               results.push({ timestamp: item.timestamp, value: medianRevenue });
             }
           }
-        
+
           return results;
         }
-        
+
         function findAverage(numbers) {
           if (numbers.length === 0) {
-            return 0; 
+            return 0;
           }
-        
+
           const sum = numbers.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
           const average = sum / numbers.length;
           return average;
@@ -1882,7 +1882,7 @@ async function getARPDAU(gameID, buildType, startDate, endDate, dateDiff, client
           return { success: false, message: 'Internal Server Error' };
         }
         // Always do 'day' granularity because ARPDAU only counts pre day
-      
+
 
     } catch (error) {
       console.error(error)
@@ -1912,7 +1912,7 @@ async function getCumulativeARPU(gameID, buildType, startDate, endDate, dateDiff
             "matchValue": "true"
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -1931,11 +1931,11 @@ async function getCumulativeARPU(gameID, buildType, startDate, endDate, dateDiff
 
       // Minutes by default if we're looking in range below 7 days
       let granularity = 'minute';
-    
+
       // Always day for cumulative ARPU
       granularity = 'day'
       const interval = `${intervalStartDate}/${intervalEndDate}`;
-      
+
       // Query for new users in given interval. Use them later to query retention for each clientID
       const query = {
       "queryType": "topN",
@@ -1971,7 +1971,7 @@ async function getCumulativeARPU(gameID, buildType, startDate, endDate, dateDiff
         ]
       }
       }
-  
+
       try {
         const response = await fetch(druidURL, {
             method: 'POST',
@@ -1979,8 +1979,8 @@ async function getCumulativeARPU(gameID, buildType, startDate, endDate, dateDiff
             headers: { 'Content-Type': 'application/json' }
         });
         const data = await response.json();
-        
-        
+
+
         if (data.error !== undefined) {
             return {success: false, error: data.error}
         }
@@ -1989,19 +1989,19 @@ async function getCumulativeARPU(gameID, buildType, startDate, endDate, dateDiff
         // Building an array of new players for a given day
         const cohortOfNewPlayers = data[0].result.map((obj) => obj.clientID);
         // console.log(cohortOfNewPlayers)
-        
+
         // Calculate ARPU per day
         async function processUserData(data) {
           const results = [];
 
           // Used exactly for finding cumulative ARPU, so we append all values of ARPUs here
           let cumulativeValue = 0;
-        
+
           for (let i = 0; i <= daysBetweenDates; i++) {
-            
+
             let targetDateStart = dayjs.utc(startDate).add(i, 'day');
             targetDateStart = targetDateStart.hour(0).minute(0).second(0).millisecond(0).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
-            
+
             let targetDateEnd = dayjs.utc(startDate).add(i, 'day');
             targetDateEnd = targetDateEnd.hour(23).minute(59).second(59).millisecond(999).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
 
@@ -2051,13 +2051,13 @@ async function getCumulativeARPU(gameID, buildType, startDate, endDate, dateDiff
           }
             }
 
-           
+
             const revenuePerUserResponse = await fetch(druidURL, {
               method: 'POST',
               body: JSON.stringify(revenuePerUser),
               headers: { 'Content-Type': 'application/json' },
             });
-        
+
             const revenuePerUserData = await revenuePerUserResponse.json();
             if (revenuePerUserData.error !== undefined) {
               results.push({ timestamp: targetDateStart, value: 0 });
@@ -2069,28 +2069,28 @@ async function getCumulativeARPU(gameID, buildType, startDate, endDate, dateDiff
                 clientID: item.event.clientID,
                 value: item.event.total_revenue.toFixed(2),
               }));
-        
+
               cohortOfNewPlayers.forEach((clientID) => {
                 if (!cleanedRPUData.some((client) => client.clientID === clientID)) {
                   cleanedRPUData.push({ clientID: clientID, value: '0.00' });
                 }
               });
-        
+
               const revenues = cleanedRPUData.map((client) => parseFloat(client.value));
               const medianRevenue = findAverage(revenues).toFixed(2);
               cumulativeValue += parseFloat(medianRevenue);
               results.push({ timestamp: targetDateStart, value: cumulativeValue });
             }
           }
-        
+
           return results;
         }
-        
+
         function findAverage(numbers) {
           if (numbers.length === 0) {
-            return 0; 
+            return 0;
           }
-        
+
           const sum = numbers.reduce((accumulator, currentValue) => accumulator + currentValue, 0);
           const average = sum / numbers.length;
           return average;
@@ -2100,18 +2100,18 @@ async function getCumulativeARPU(gameID, buildType, startDate, endDate, dateDiff
         try {
           let ARPDAU = {};
           ARPDAU = await processUserData(data);
-          
+
           return { success: true, data: ARPDAU, granularity: 'day' };
         } catch (error) {
           console.error(error);
           return { success: false, message: 'Internal Server Error' };
         }
         // Always do 'day' granularity because ARPDAU only counts pre day
-        
+
       } catch (error) {
 
       }
-          
+
 };
 // Daily Active Users
 async function getPayingUsersShare(gameID, buildType, startDate, endDate, dateDiff, clientIDs) {
@@ -2130,7 +2130,7 @@ async function getPayingUsersShare(gameID, buildType, startDate, endDate, dateDi
             "matchValue": buildType
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -2145,13 +2145,13 @@ async function getPayingUsersShare(gameID, buildType, startDate, endDate, dateDi
   const intervalStartDate = startDate.toISOString()
   const intervalEndDate = endDate.toISOString()
   const daysBetweenDates = dateDiff;
-  
+
     // Minutes by default if we're looking in range below 7 days
     let granularity = 'minute';
     granularity = getGranularity(daysBetweenDates);
 
     const interval = `${intervalStartDate}/${intervalEndDate}`;
-    
+
     // Unique users in time interval
     const query = {
         "queryType": "topN",
@@ -2210,10 +2210,10 @@ async function getPayingUsersShare(gameID, buildType, startDate, endDate, dateDi
         if (data.length === 0) {
           return {success: false, error: 'No Data returned'}
         }
-        
-        
+
+
         const clientIDs = data[0].result.map(item => item.clientID);
-        
+
         // If there are no players in given time interval, dont bother calculating revenue and just return
         if (clientIDs === undefined || clientIDs.length === 0) return {success: false}
 
@@ -2250,7 +2250,7 @@ async function getPayingUsersShare(gameID, buildType, startDate, endDate, dateDi
           body: JSON.stringify(revenuePerUser),
           headers: { 'Content-Type': 'application/json' },
         });
-    
+
         const revenuePerUserData = await revenuePerUserResponse.json()
 
         if (revenuePerUserData.error !== undefined) {
@@ -2270,8 +2270,8 @@ async function getPayingUsersShare(gameID, buildType, startDate, endDate, dateDi
         } else {
           return {success: true, data: [{data1: revenuePerUserData.length}, {data2: clientIDs.length}], granularity}
         }
-        
-      
+
+
     } catch (error) {
       console.error(error)
       return {success: false}
@@ -2294,7 +2294,7 @@ async function getARPPU(gameID, buildType, startDate, endDate, dateDiff, clientI
             "matchValue": buildType
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -2309,7 +2309,7 @@ async function getARPPU(gameID, buildType, startDate, endDate, dateDiff, clientI
   const intervalStartDate = startDate.toISOString()
   const intervalEndDate = endDate.toISOString()
   const daysBetweenDates = dateDiff;
-  
+
     // Minutes by default if we're looking in range below 7 days
     let granularity = 'minute';
     granularity = getGranularity(daysBetweenDates);
@@ -2356,8 +2356,8 @@ async function getARPPU(gameID, buildType, startDate, endDate, dateDiff, clientI
             headers: { 'Content-Type': 'application/json' }
         });
         const data = await response.json();
-        
-        
+
+
 
         if (data.error !== undefined) {
             return {success: false, error: data.error}
@@ -2369,7 +2369,7 @@ async function getARPPU(gameID, buildType, startDate, endDate, dateDiff, clientI
         // Calculate ARPPU per day
         async function processUserData(data) {
           const results = [];
-        
+
           for (const item of data) {
 
             const activeUsers = item.result.map((item) => item.clientID);
@@ -2420,13 +2420,13 @@ async function getARPPU(gameID, buildType, startDate, endDate, dateDiff, clientI
           }
             }
 
-           
+
             const revenuePerUserResponse = await fetch(druidURL, {
               method: 'POST',
               body: JSON.stringify(revenuePerUser),
               headers: { 'Content-Type': 'application/json' },
             });
-        
+
             const revenuePerUserData = await revenuePerUserResponse.json();
 
             if (revenuePerUserData.error !== undefined) {
@@ -2439,26 +2439,26 @@ async function getARPPU(gameID, buildType, startDate, endDate, dateDiff, clientI
                 clientID: item.event.clientID,
                 value: item.event.total_revenue.toFixed(2),
               }));
-        
+
               const revenues = cleanedRPUData.map((client) => parseFloat(client.value));
               const medianRevenue = findMedian(revenues).toFixed(2);
               results.push({ timestamp: item.timestamp, value: medianRevenue });
             }
           }
-        
+
           return results;
         }
-        
+
         function findMedian(numbers) {
           if (numbers.length === 0) {
             return 0; // Вернуть 0, если массив пустой, чтобы избежать ошибок
           }
-        
+
           // Сортируем массив чисел
           const sortedNumbers = numbers.sort((a, b) => a - b);
-        
+
           const middleIndex = Math.floor(sortedNumbers.length / 2);
-        
+
           if (sortedNumbers.length % 2 === 0) {
             // Если массив четной длины, возвращаем среднее двух средних элементов
             const median = (sortedNumbers[middleIndex - 1] + sortedNumbers[middleIndex]) / 2;
@@ -2481,7 +2481,7 @@ async function getARPPU(gameID, buildType, startDate, endDate, dateDiff, clientI
           return { success: false, message: 'Internal Server Error' };
         }
         // Always do 'day' granularity because ARPPU only counts pre day
-      
+
 
     } catch (error) {
       console.error(error)
@@ -2505,7 +2505,7 @@ async function getStickinessRate(gameID, buildType, startDate, endDate, dateDiff
             "matchValue": buildType
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -2520,13 +2520,13 @@ async function getStickinessRate(gameID, buildType, startDate, endDate, dateDiff
   const intervalStartDate = startDate.toISOString()
   const intervalEndDate = endDate.toISOString()
   const daysBetweenDates = dateDiff;
-  
+
     // Minutes by default if we're looking in range below 7 days
     let granularity = 'minute';
     granularity = getGranularity(daysBetweenDates);
 
     const interval = `${intervalStartDate}/${intervalEndDate}`;
-    
+
     // List of unique users in interval
     const query = {
         "queryType": "topN",
@@ -2585,7 +2585,7 @@ async function getStickinessRate(gameID, buildType, startDate, endDate, dateDiff
         if (data.length === 0) {
           return {success: false, error: 'No Data returned'}
         }
-        
+
         // Since Druid's granularity won't work for us and break things, we need to keep Druid's granularity as "all"
         // and process users on our own, rounding results to minutes/hours/days.
         // If we set any other type of granularity in Druid's granularity in query, it will return
@@ -2597,26 +2597,26 @@ async function getStickinessRate(gameID, buildType, startDate, endDate, dateDiff
           data.forEach((entry) => {
             const timestamp = entry.timestamp;
             const roundedTime = roundTime(timestamp, timeUnit);
-        
+
             if (!counts[roundedTime]) {
               counts[roundedTime] = new Set();
             }
-        
+
             counts[roundedTime].add(entry.clientID);
           });
-        
+
           const result = Object.keys(counts).map((key) => ({
             timestamp: Number(key),
             count: counts[key].size,
           }));
-        
+
           return result;
         }
-        
+
         // Here we round raw timestamp to a minute, hour or day
         function roundTime(timestamp, timeUnit) {
           const date = new Date(timestamp);
-        
+
           if (timeUnit === 'minute') {
             date.setSeconds(0, 0);
           } else if (timeUnit === 'hour') {
@@ -2624,7 +2624,7 @@ async function getStickinessRate(gameID, buildType, startDate, endDate, dateDiff
           } else if (timeUnit === 'day') {
             date.setHours(0, 0, 0, 0);
           }
-          
+
           return date.getTime();
         }
 
@@ -2636,11 +2636,11 @@ async function getStickinessRate(gameID, buildType, startDate, endDate, dateDiff
 
 
         // We now need to get current month's interval
-        const firstDayOfMonth = 
+        const firstDayOfMonth =
         dayjs().startOf('month').hour(0).minute(0).second(0).millisecond(0).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');;
-        const lastDayOfMonth = 
+        const lastDayOfMonth =
         dayjs().endOf('month').hour(23).minute(59).second(59).millisecond(999).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');;
-        
+
         const MAUquery = {
           "queryType": "timeseries",
           "dataSource": "New Sessions",
@@ -2676,7 +2676,7 @@ async function getStickinessRate(gameID, buildType, startDate, endDate, dateDiff
             headers: { 'Content-Type': 'application/json' }
         });
         const MAUdata = await MAUResponse.json();
-        
+
         if (MAUdata.error !== undefined) {
           return {success: false, error: MAUdata.error}
         }
@@ -2684,12 +2684,12 @@ async function getStickinessRate(gameID, buildType, startDate, endDate, dateDiff
           return {success: false, error: 'No MAU Data returned'}
         }
         const MAU = MAUdata[0].result.mau
-        
+
         const stickiness = cleanedData.map(item => ({
           timestamp: item.timestamp,
           value: ((item.value / MAU) * 100).toFixed(0),
         }))
-      
+
         return {success: true, data: stickiness, granularity}
 
     } catch (error) {
@@ -2714,7 +2714,7 @@ async function getSessionLength(gameID, buildType, startDate, endDate, dateDiff,
             "matchValue": buildType
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -2729,7 +2729,7 @@ async function getSessionLength(gameID, buildType, startDate, endDate, dateDiff,
   const intervalStartDate = startDate.toISOString()
   const intervalEndDate = endDate.toISOString()
   const daysBetweenDates = dateDiff;
-  
+
     // Minutes by default if we're looking in range below 7 days
     let granularity = 'minute';
     granularity = getGranularity(daysBetweenDates);
@@ -2769,15 +2769,15 @@ async function getSessionLength(gameID, buildType, startDate, endDate, dateDiff,
             headers: { 'Content-Type': 'application/json' }
         });
         const data = await response.json();
-        
+
         if (data.error !== undefined) {
             return {success: false, error: data.error}
         }
-        
-        
-        // Check if we get totally no data 
+
+
+        // Check if we get totally no data
         if (data.length === 0 || data[0].result.sessionLength === null) return {success: false, error: data.error}
-        
+
 
 
         // Remove all null elements like those below
@@ -2802,14 +2802,14 @@ async function getSessionLength(gameID, buildType, startDate, endDate, dateDiff,
     }
 };
 
-// 
+//
 // Analytics Dashboard - User Acquisition
-// 
+//
 
 
-// 
+//
 // Overview Page - Sidebar
-// 
+//
 
 // Эту функцию надо доделать. Сейчас она ничего ничего путного не возвращает, а запрос к друиду просто возвращает массив уникальных sessionID
 async function getActiveSessions(gameID, buildType, startDate, endDate, dateDiff, clientIDs) {
@@ -2828,7 +2828,7 @@ async function getActiveSessions(gameID, buildType, startDate, endDate, dateDiff
             "matchValue": buildType
         }
     ];
-  
+
     // Добавляем фильтр 'in' только если массив clientIDs содержит элементы
     if (clientIDs.length > 0) {
         fields.unshift({
@@ -2843,7 +2843,7 @@ async function getActiveSessions(gameID, buildType, startDate, endDate, dateDiff
   const intervalStartDate = startDate.toISOString()
   const intervalEndDate = endDate.toISOString()
   const daysBetweenDates = dateDiff;
-  
+
   // Minutes by default if we're looking in range below 7 days
   let granularity = 'minute';
   granularity = getGranularity(daysBetweenDates);
@@ -2913,7 +2913,7 @@ async function getActiveSessions(gameID, buildType, startDate, endDate, dateDiff
         if (dataNewSessions.error !== undefined) {
             return {success: false, error: dataNewSessions.error}
         }
-        
+
         const response2 = await fetch(druidURL, {
             method: 'POST',
             body: JSON.stringify(queryCountEndSessions),
@@ -2921,7 +2921,7 @@ async function getActiveSessions(gameID, buildType, startDate, endDate, dateDiff
         });
         const dataEndSessions = await response2.json();
 
-        
+
         if (dataEndSessions.error !== undefined) {
             return {success: false, error: dataEndSessions.error}
         }
@@ -2934,7 +2934,7 @@ async function getActiveSessions(gameID, buildType, startDate, endDate, dateDiff
           }
           return ({
           timestamp: item.timestamp,
-          value: item.result.newSessions - endedSessions}) 
+          value: item.result.newSessions - endedSessions})
         });
 
 
@@ -2950,7 +2950,7 @@ module.exports = {
 
 
     getRecentClientIDs,
-  
+
     // Player Warehouse
     getMostRecentValue,
     getFirstEventValue,
