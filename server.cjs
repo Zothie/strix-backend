@@ -5026,13 +5026,49 @@ app.post('/api/analytics/getDAU', async (req, res) => {
     if (filterSegments && filterSegments.length !== 0) {
       clientIDs = await getPlayersFromSegment(gameID, branchName, filterSegments)
     }
-    const deltaResponse = await druidLib.getDAU(gameID, branchName, deltaStartDate, deltaEndDate, deltaDateDiff, clientIDs)
-    const response = await druidLib.getDAU(gameID, branchName, startDate, endDate, dateDiff, clientIDs)
+    // const deltaResponse = await druidLib.getDAU(gameID, branchName, deltaStartDate, deltaEndDate, deltaDateDiff, clientIDs)
+    // const response = await druidLib.getDAU(gameID, branchName, startDate, endDate, dateDiff, clientIDs)
 
-    const deltaValue = calculateDelta(deltaResponse, response)
+    // const deltaValue = calculateDelta(deltaResponse, response)
 
-    if (response.success) {
-      res.status(200).json({success: true, message: {data: response.data, granularity: response.granularity, deltaValue: deltaValue}})
+    const responseData = [
+      {
+        timestamp: '2023-12-19T10:00:00.000Z',
+        value: randomNumberInRange(1, 100)
+      },
+      {
+        timestamp: '2023-12-20T10:00:00.000Z',
+        value: randomNumberInRange(1, 100)
+      },
+      {
+        timestamp: '2023-12-21T10:00:00.000Z',
+        value: randomNumberInRange(1, 100)
+      },
+      {
+        timestamp: '2023-12-22T10:00:00.000Z',
+        value: randomNumberInRange(1, 100)
+      },
+      {
+        timestamp: '2023-12-23T10:00:00.000Z',
+        value: randomNumberInRange(1, 100)
+      },
+      {
+        timestamp: '2023-12-24T10:00:00.000Z',
+        value: randomNumberInRange(1, 100)
+      },
+      {
+        timestamp: '2023-12-25T10:00:00.000Z',
+        value: randomNumberInRange(1, 100)
+      },
+      {
+        timestamp: '2023-12-26T10:00:00.000Z',
+        value: randomNumberInRange(1, 100)
+      },
+    ]
+
+    // if (response.success) {
+    if (true) {
+      res.status(200).json({success: true, message: {data: responseData, granularity: 'day', deltaValue: randomNumberInRange(1, 500)}})
     } else{
       res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
     }
@@ -5042,8 +5078,11 @@ app.post('/api/analytics/getDAU', async (req, res) => {
     res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
   }
 
-
 });
+const randomNumberInRange = (min, max) => {
+        return Math.floor(Math.random()
+            * (max - min + 1)) + min;
+};
 app.post('/api/analytics/getRevenue', async (req, res) => {
   const {gameID, branchName, filterDate, filterSegments} = req.body
 
@@ -5076,13 +5115,160 @@ app.post('/api/analytics/getRevenue', async (req, res) => {
     if (filterSegments && filterSegments.length !== 0) {
       clientIDs = await getPlayersFromSegment(gameID, branchName, filterSegments)
     }
-    const deltaResponse = await druidLib.getRevenue(gameID, branchName, deltaStartDate, deltaEndDate, deltaDateDiff, clientIDs)
-    const response = await druidLib.getRevenue(gameID, branchName, startDate, endDate, dateDiff, clientIDs)
+    // const deltaResponse = await druidLib.getRevenue(gameID, branchName, deltaStartDate, deltaEndDate, deltaDateDiff, clientIDs)
+    // const response = await druidLib.getRevenue(gameID, branchName, startDate, endDate, dateDiff, clientIDs)
 
-    const deltaValue = calculateDelta(deltaResponse, response)
+    // const deltaValue = calculateDelta(deltaResponse, response)
 
-    if (response.success) {
-      res.status(200).json({success: true, message: {data: response.data, granularity: response.granularity, deltaValue: deltaValue}})
+    let responseData = [
+      {
+        timestamp: '2023-12-19T10:00:00.000Z',
+        value: randomNumberInRange(1, 500)
+      },
+      {
+        timestamp: '2023-12-20T10:00:00.000Z',
+        value: randomNumberInRange(1, 500)
+      },
+      {
+        timestamp: '2023-12-21T10:00:00.000Z',
+        value: randomNumberInRange(1, 500)
+      },
+      {
+        timestamp: '2023-12-22T10:00:00.000Z',
+        value: randomNumberInRange(1, 500)
+      },
+      {
+        timestamp: '2023-12-23T10:00:00.000Z',
+        value: randomNumberInRange(1, 500)
+      },
+      {
+        timestamp: '2023-12-24T10:00:00.000Z',
+        value: randomNumberInRange(1, 500)
+      },
+      {
+        timestamp: '2023-12-25T10:00:00.000Z',
+        value: randomNumberInRange(1, 500)
+      },
+      {
+        timestamp: '2023-12-26T10:00:00.000Z',
+        value: randomNumberInRange(1, 500)
+      },
+    ]
+
+    const randVariant = randomNumberInRange(1, 3)
+    switch (randVariant) {
+      case 1:
+        responseData = [
+          {
+            timestamp: '2023-12-19T10:00:00.000Z',
+            value: randomNumberInRange(-10, -100)
+          },
+          {
+            timestamp: '2023-12-20T10:00:00.000Z',
+            value: randomNumberInRange(-10, -100)
+          },
+          {
+            timestamp: '2023-12-21T10:00:00.000Z',
+            value: randomNumberInRange(-10, -100)
+          },
+          {
+            timestamp: '2023-12-22T10:00:00.000Z',
+            value: randomNumberInRange(-10, -100)
+          },
+          {
+            timestamp: '2023-12-23T10:00:00.000Z',
+            value: randomNumberInRange(-10, -100)
+          },
+          {
+            timestamp: '2023-12-24T10:00:00.000Z',
+            value: randomNumberInRange(-10, -100)
+          },
+          {
+            timestamp: '2023-12-25T10:00:00.000Z',
+            value: randomNumberInRange(-10, -100)
+          },
+          {
+            timestamp: '2023-12-26T10:00:00.000Z',
+            value: randomNumberInRange(-10, -100)
+          },
+        ]
+        break;
+      case 2:
+        responseData = [
+          {
+            timestamp: '2023-12-19T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-20T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-21T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-22T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-23T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-24T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-25T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-26T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+        ]
+        break;
+      case 3:
+        responseData = [
+          {
+            timestamp: '2023-12-19T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-20T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-21T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-22T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-23T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-24T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-25T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+          {
+            timestamp: '2023-12-26T10:00:00.000Z',
+            value: randomNumberInRange(1, 500)
+          },
+        ]
+        break;
+    }
+
+    if (true) {
+      res.status(200).json({success: true, message: {data: responseData, granularity: 'day', deltaValue: randVariant === 1 ? randomNumberInRange(-500, -1000) : randomNumberInRange(500, 1000)}})
     } else{
       res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
     }
@@ -5484,91 +5670,91 @@ app.post('/api/analytics/getInstallsByCountry', async (req, res) => {
       {
         countryName: 'Russia',
         installs: {
-          admob: 111,
-          applovin: 111,
-          ironsource: 111,
-          unityads: 444,
+          admob: randomNumberInRange(100, 1000),
+          applovin: randomNumberInRange(100, 1000),
+          ironsource: randomNumberInRange(100, 1000),
+          unityads: randomNumberInRange(100, 1000),
         }
       },
       {
         countryName: 'Japan',
         installs: {
-          admob: 3223,
-          applovin: 111,
-          ironsource: 222,
-          unityads: 222,
+          admob: randomNumberInRange(100, 1000),
+          applovin: randomNumberInRange(100, 1000),
+          ironsource: randomNumberInRange(100, 1000),
+          unityads: randomNumberInRange(100, 1000),
         }
       },
       {
         countryName: 'United States',
         installs: {
-          admob: 111,
-          applovin: 2,
-          ironsource: 2,
-          unityads: 444,
+          admob: randomNumberInRange(100, 1000),
+          applovin: randomNumberInRange(100, 1000),
+          ironsource: randomNumberInRange(100, 1000),
+          unityads: randomNumberInRange(100, 1000),
         }
       },
       {
         countryName: 'France',
         installs: {
-          admob: 12,
-          applovin: 300,
-          ironsource: 0,
-          unityads: 11,
+          admob: randomNumberInRange(100, 1000),
+          applovin: randomNumberInRange(100, 1000),
+          ironsource: randomNumberInRange(100, 1000),
+          unityads: randomNumberInRange(100, 1000),
         }
       },
       {
         countryName: 'Italy',
         installs: {
-          admob: 111,
-          applovin: 222,
-          ironsource: 333,
-          unityads: 444,
+          admob: randomNumberInRange(100, 1000),
+          applovin: randomNumberInRange(100, 1000),
+          ironsource: randomNumberInRange(100, 1000),
+          unityads: randomNumberInRange(100, 1000),
         }
       },
       {
         countryName: 'Switzerland',
         installs: {
-          admob: 111,
-          applovin: 222,
-          ironsource: 333,
-          unityads: 444,
+          admob: randomNumberInRange(100, 1000),
+          applovin: randomNumberInRange(100, 1000),
+          ironsource: randomNumberInRange(100, 1000),
+          unityads: randomNumberInRange(100, 1000),
         }
       },
       {
         countryName: 'China',
         installs: {
-          admob: 111,
-          applovin: 222,
-          ironsource: 333,
-          unityads: 444,
+          admob: randomNumberInRange(100, 1000),
+          applovin: randomNumberInRange(100, 1000),
+          ironsource: randomNumberInRange(100, 1000),
+          unityads: randomNumberInRange(100, 1000),
         }
       },
       {
         countryName: 'Germany',
         installs: {
-          admob: 111,
-          applovin: 222,
-          ironsource: 333,
-          unityads: 444,
+          admob: randomNumberInRange(100, 1000),
+          applovin: randomNumberInRange(100, 1000),
+          ironsource: randomNumberInRange(100, 1000),
+          unityads: randomNumberInRange(100, 1000),
         }
       },
       {
         countryName: 'Australia',
         installs: {
-          admob: 111,
-          applovin: 222,
-          ironsource: 333,
-          unityads: 444,
+          admob: randomNumberInRange(100, 1000),
+          applovin: randomNumberInRange(100, 1000),
+          ironsource: randomNumberInRange(100, 1000),
+          unityads: randomNumberInRange(100, 1000),
         }
       },
       {
         countryName: 'New Zealand',
         installs: {
-          admob: 111,
-          applovin: 222,
-          ironsource: 333,
-          unityads: 444,
+          admob: randomNumberInRange(100, 1000),
+          applovin: randomNumberInRange(100, 1000),
+          ironsource: randomNumberInRange(100, 1000),
+          unityads: randomNumberInRange(100, 1000),
         }
       },
     ]
@@ -6054,73 +6240,73 @@ app.post('/api/analytics/getAdPerformance', async (req, res) => {
     const responseData = [
       {
         networkName: 'admob',
-        installs: 123,
-        cpi: '1.02',
-        costs: '59285.00',
+        installs: randomNumberInRange(100, 1000),
+        cpi: '1.32',
+        costs: `${randomNumberInRange(1000, 5000)}.00`,
         payingshare: '2.21',
         arpu: '1.21',
         revenue: '52285.00',
-        roi: '89.71'
+        roi: `${randomNumberInRange(1, 100)}.${randomNumberInRange(1, 100)}`,
       },
       {
         networkName: 'adcolony',
-        installs: 123,
-        cpi: '1.02',
-        costs: '59285.00',
+        installs: randomNumberInRange(100, 1000),
+        cpi: '1.11',
+        costs: `${randomNumberInRange(1000, 5000)}.00`,
         payingshare: '2.21',
         arpu: '1.21',
         revenue: '52285.00',
-        roi: '89.71'
+        roi: `${randomNumberInRange(1, 100)}.${randomNumberInRange(1, 100)}`,
       },
       {
         networkName: 'unityads',
-        installs: 123,
-        cpi: '1.02',
-        costs: '59285.00',
+        installs: randomNumberInRange(100, 1000),
+        cpi: '1.56',
+        costs: `${randomNumberInRange(1000, 5000)}.00`,
         payingshare: '2.21',
         arpu: '1.21',
         revenue: '52285.00',
-        roi: '89.71'
+        roi: `${randomNumberInRange(1, 100)}.${randomNumberInRange(1, 100)}`,
       },
       {
         networkName: 'ironsource',
-        installs: 123,
-        cpi: '1.02',
-        costs: '59285.00',
+        installs: randomNumberInRange(100, 1000),
+        cpi: '0.67',
+        costs: `${randomNumberInRange(1000, 5000)}.00`,
         payingshare: '2.21',
         arpu: '1.21',
         revenue: '52285.00',
-        roi: '89.71'
+        roi: `${randomNumberInRange(1, 100)}.${randomNumberInRange(1, 100)}`,
       },
       {
         networkName: 'applovin',
-        installs: 123,
-        cpi: '1.02',
-        costs: '59285.00',
+        installs: randomNumberInRange(100, 1000),
+        cpi: '0.98',
+        costs: `${randomNumberInRange(1000, 5000)}.00`,
         payingshare: '2.21',
         arpu: '1.21',
         revenue: '52285.00',
-        roi: '89.71'
+        roi: `${randomNumberInRange(1, 100)}.${randomNumberInRange(1, 100)}`,
       },
       {
         networkName: 'fyber',
-        installs: 123,
-        cpi: '1.02',
-        costs: '59285.00',
+        installs: randomNumberInRange(100, 1000),
+        cpi: '2.02',
+        costs: `${randomNumberInRange(1000, 5000)}.00`,
         payingshare: '2.21',
         arpu: '1.21',
         revenue: '52285.00',
-        roi: '89.71'
+        roi: `${randomNumberInRange(1, 100)}.${randomNumberInRange(1, 100)}`,
       },
       {
         networkName: 'facebook',
-        installs: 123,
-        cpi: '1.02',
-        costs: '59285.00',
+        installs: randomNumberInRange(100, 1000),
+        cpi: '1.23',
+        costs: `${randomNumberInRange(1000, 5000)}.00`,
         payingshare: '2.21',
         arpu: '1.21',
         revenue: '52285.00',
-        roi: '89.71'
+        roi: `${randomNumberInRange(1, 100)}.${randomNumberInRange(1, 100)}`,
       },
     ]
 
