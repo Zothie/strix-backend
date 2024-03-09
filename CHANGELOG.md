@@ -9,6 +9,10 @@
 
 - removed prerender.io integration (e43da24d96e493e00068abcd1911f1e6f3892f9d)
 
+### Fixes
+
+- removed prerender.io #2 (321eb84bc0fc3c013c92bd51d804995536fd20b0)
+
 ## 1.1.0
 2024-03-09
 
