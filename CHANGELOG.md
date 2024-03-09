@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.1.0
+2024-03-09
+
+### Features
+
+- added prerender.io integration (a26cd6b3596dac979e09a70bfd8710a959404842)
+
 ## 1.0.13
 2024-03-05
 
