@@ -86,6 +86,13 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+
+
+
+
+app.use(require('prerender-node').set('prerenderToken', '9btGk3Jl83MIfILoz50d'));
+
+
 // Регистрация нового пользователя
 app.post('/api/register', async (req, res) => {
   const { username, email, password } = req.body;

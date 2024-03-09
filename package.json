@@ -24,6 +24,7 @@
     "node-fetch": "^2.6.1",
     "plywood": "^0.33.3",
     "plywood-druid-requester": "^2.7.0",
+    "prerender-node": "^3.8.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
