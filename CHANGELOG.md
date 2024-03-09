@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.0.13
+2024-03-05
+
+### Fixes
+
+- fake data in analytics (2316b136a81fd1bb3b9d73e36296f498d718a00e)
+
 ## 1.0.12
 2024-02-22
 
