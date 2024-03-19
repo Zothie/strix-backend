@@ -1,18 +1,27 @@
 const mongoose = require('mongoose');
-// Определение основной схемы нод планирования
-const customPropertySchema = new mongoose.Schema({
-    propertyID: String,
-    valueType: String,
-    value: String,
-  });
-  
-  const entityPropertiesSchema = new mongoose.Schema({
+
+  const entityBasicSchema = new mongoose.Schema({
     entityID: String,
+
     isInAppPurchase: Boolean,
-    softValue: Number,
-    hardValue: Number,
-    realValue: Number,
-    customProperties: [customPropertySchema],
+    realValueBase: Number,
+    isCurrency: Boolean,
+
+    entityIcon: String,
+
+    mainConfigs: String,
+    parentCategory: String,
+    inheritedCategories: [String],
+    inheritedConfigs: String,
+  });
+
+  const entityCategorySchema = new mongoose.Schema({
+    categoryID: String,
+
+    mainConfigs: String,
+    parentCategory: String,
+    inheritedCategories: [String],
+    inheritedConfigs: String,
   });
   
   const nodeSchema = new mongoose.Schema({
@@ -29,9 +38,9 @@ const customPropertySchema = new mongoose.Schema({
       content: String,
       publishLink: String,
     },
-    remoteConfigParams: [String],
     analyticsEvents: [String],
-    entityProperties: entityPropertiesSchema,
+    entityCategory: entityCategorySchema,
+    entityBasic: entityBasicSchema,
   });
   
   const planningTypeSchema = new mongoose.Schema({

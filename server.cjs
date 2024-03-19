@@ -393,15 +393,53 @@ app.post('/api/createGame', async (req, res) => {
       branches: [
         {
           branch: 'development',
-          planningTypes: [],
+          planningTypes: [
+            {
+              type: 'entity',
+              nodes: [
+                {
+                  nodeID: 'Root',
+                  name: 'Root',
+                  entityCategory: {
+                    categoryID: 'Root',
+                    mainConfigs: '',
+                    parentCategory: '',
+                    inheritedConfigs: '',
+                  }
+                }
+              ],
+            },
+            {
+              type: 'gameplay',
+              nodes: [],
+            },
+          ],
         },
         {
           branch: 'stage',
-          planningTypes: [],
+          planningTypes: [
+            {
+              type: 'entity',
+              nodes: [],
+            },
+            {
+              type: 'gameplay',
+              nodes: [],
+            },
+          ],
         },
         {
           branch: 'production',
-          planningTypes: [],
+          planningTypes: [
+            {
+              type: 'entity',
+              nodes: [],
+            },
+            {
+              type: 'gameplay',
+              nodes: [],
+            },
+          ],
         },
       ],
     });
@@ -501,6 +539,7 @@ app.post('/api/createGame', async (req, res) => {
           type: 'entity',
           nodes: [{
             nodeID: 'Root',
+            isCategory: true,
             subnodes: [],
           }],
           },
@@ -964,6 +1003,206 @@ app.post('/api/createPlanningNode', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+// V2 - ENTITY CREATION
+app.post('/api/createEntity', async (req, res) => {
+  try {
+    const { gameID, branch, entityObj } = req.body;
+
+    // Проверка наличия обязательных полей в запросе
+    if (!gameID || !branch || !entityObj) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const query = {
+      gameID: gameID,
+      'branches.branch': branch
+    };
+
+    const newNodeID = uuid.v4();
+    
+    const update = {
+      $push: { 
+        'branches.$.planningTypes.$[type].nodes': {
+          nodeID: newNodeID,
+          name: entityObj.entityName,
+          description: entityObj.entityDescription,
+          techDescription: entityObj.entityTechDescription,
+          entityCategory: entityObj.entityCategory,
+          entityBasic: entityObj.entityBasic
+        }
+      }
+    };
+    
+    const options = {
+      arrayFilters: [
+        { 'type.type': 'entity' } // фильтруем нужный тип планирования
+      ],
+      new: true // чтобы получить обновленный документ
+    };
+    
+    await NodeModel.findOneAndUpdate(query, update, options)
+
+    // If not empty, it is basic entity. Category otherwise
+    if (entityObj.entityBasic && entityObj.entityBasic.entityID !== '') {
+      // Trying to put it under parent category immediately
+      if (entityObj.entityBasic.parentCategory !== '') {
+        const addEntityToCategory = await addEntityToParent(gameID, branch, entityObj.entityBasic.parentCategory, newNodeID, false)
+        // console.log('Adding basic entity:', addEntityToCategory, 'Params:', gameID, branch, entityObj.entityBasic.parentCategory, newNodeID)
+      }
+    } else {
+      // Trying to put it under parent category immediately
+      if (entityObj.entityCategory.parentCategory !== '') {
+        const addEntityToCategory = await addEntityToParent(gameID, branch, entityObj.entityCategory.parentCategory, newNodeID, true)
+        // console.log('Adding category:', addEntityToCategory, 'Params:', gameID, branch, entityObj.entityCategory.parentCategory, newNodeID)
+      } 
+    }
+
+    res.status(201).json({ message: 'Empty node created successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+async function addEntityToParent(gameID, branch, parentId, newNode, isCategory) {
+  try {
+
+    // Поиск документа в коллекции plannings по gameID
+    const planningDocument = await PlanningTreeModel.findOne({ gameID }).exec();
+
+    if (!planningDocument) {
+      return res.status(404).json({ error: 'Planning document not found' });
+    }
+
+    // Поиск ветки с соответствующим branch
+    const foundBranch = planningDocument.branches.find(b => b.branch === branch);
+
+    if (!foundBranch) {
+      return res.status(404).json({ error: 'Branch not found' });
+    }
+
+    let success = false;
+    // Рекурсивная функция для поиска и обновления узла
+    const findAndUpdateNode = (nodes) => {
+      for (const node of nodes) {
+        console.log('Comparing', node._id.toString(), 'with', parentId)
+        if (node._id.toString() === parentId) {
+          // Найден узел с соответствующим parentId
+          const newNodeObject = {
+            nodeID: newNode,
+            subnodes: [],
+            _id: new mongoose.Types.ObjectId(),
+            isCategory: isCategory
+          };
+          node.subnodes.push(newNodeObject);
+          planningDocument.save(); // Сохранение изменений
+          success = true;
+          return;
+        }
+
+        if (node.subnodes.length > 0) {
+          // Рекурсивный вызов для подузлов
+          findAndUpdateNode(node.subnodes);
+        }
+      }
+    };
+
+    // Начало поиска и обновления узла
+    findAndUpdateNode(foundBranch.planningTypes.find(pt => pt.type === 'entity')?.nodes || []);
+
+    if (success) {
+      return { status: 200, success: true };
+    } else {
+      // Если не найден узел с указанным parentId
+      return { status: 404, success: false, error: 'Node with parentId not found' };
+    }
+
+  } catch (error) {
+    console.error(error);
+    return { status: 500, success: false, error: 'Internal Server Error' };
+  }
+}
+// ENTITY TREE SEARCH & GATHERING CATEGORIES ON THE WAY
+app.get('/api/findNodeById', async (req, res) => {
+  try {
+    const { nodeID, gameID, branch } = req.query;
+
+    // Проверяем наличие nodeID в параметрах запроса
+    if (!nodeID) {
+      return res.status(400).json({ message: 'nodeID is required' });
+    }
+
+    // Находим узел в базе данных по nodeID
+    const foundNode = await findEntityById(gameID, branch, nodeID);
+
+
+    // Если узел не найден, возвращаем пустой массив
+    if (!foundNode) {
+      return res.status(404).json({ message: 'Node not found' });
+    }
+
+    // Обходим дерево рекурсивно и собираем nodeID всех узлов с isEntityCategory = true
+    const entityCategoryNodeIDs = findEntityCategoryNodeIDs(foundNode);
+
+    res.status(200).json({ entityCategoryNodeIDs });
+  } catch (error) {
+    console.error("Error finding node by ID:", error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Функция для поиска узла по nodeID
+async function findEntityById(gameID, branch, nodeID) {
+  const query = {
+    gameID: gameID,
+    'branches.branch': branch
+  };
+  const tree = await PlanningTreeModel.findOne(query);
+
+  const branchObject = tree.branches.find(b => b.branch === branch);
+  const entityNodes = branchObject.planningTypes.find(t => t.type === 'entity').nodes;
+
+
+  function findNode(node) {
+    if (node.nodeID === nodeID) {
+      return node;
+    }
+    if (node.subnodes && node.subnodes.length > 0) {
+      for (const subnode of node.subnodes) {
+        const found = findNode(subnode);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
+  }
+
+  return findNode(entityNodes[0]);
+}
+
+// Функция для обхода дерева и сбора nodeID всех узлов с isEntityCategory = true
+function findEntityCategoryNodeIDs(node) {
+  const entityCategoryNodeIDs = [];
+
+  // Рекурсивно обходим дерево
+  function traverse(node, path = []) {
+    if (node.isEntityCategory === false) {
+      entityCategoryNodeIDs.push(node.nodeID);
+    }
+    path.push(node.nodeID);
+    if (node.subnodes && node.subnodes.length > 0) {
+      for (const subnode of node.subnodes) {
+        traverse(subnode, [...path]);
+      }
+    }
+  }
+
+  traverse(node);
+
+  return entityCategoryNodeIDs;
+}
+
 // Удалить ноду из планнинга. Также код вызывает удаление всех её прямых зависимостей
 app.post('/api/removePlanningNode', async (req, res) => {
   try {
@@ -1652,12 +1891,13 @@ app.post('/api/getNodeTree', async (req, res) => {
     const nodesList = planningTypeObj ? planningTypeObj.nodes : [];
 
     const transformNodes = (inputNodes) => {
-      return inputNodes.map(({ _id, nodeID, subnodes, isGameplay, gameplayName }) => ({
+      return inputNodes.map(({ _id, nodeID, subnodes, isGameplay, gameplayName, isCategory }) => ({
         ID: nodeID,
         Subnodes: transformNodes(subnodes),
         _id: _id,
         isGameplay: isGameplay,
         gameplayName: gameplayName,
+        isCategory: isCategory,
       }));
     };
 
@@ -1670,8 +1910,12 @@ app.post('/api/getNodeTree', async (req, res) => {
   }
 });
 app.post('/api/addChildNodeInTree', async (req, res) => {
+  const { gameID, branchName, planningType, parentId, newNode } = req.body;
+  const result = await addChildNodeInPlanningTree(gameID, branchName, planningType, parentId, newNode)
+  res.status(result.status).json({sucess: result.success})
+});
+async function addChildNodeInPlanningTree(gameID, branchName, planningType, parentId, newNode) {
   try {
-    const { gameID, branchName, planningType, parentId, newNode } = req.body;
 
     // Поиск документа в коллекции plannings по gameID
     const planningDocument = await PlanningTreeModel.findOne({ gameID }).exec();
@@ -1688,15 +1932,18 @@ app.post('/api/addChildNodeInTree', async (req, res) => {
     }
 
     let success = false;
+
+    console.log(newNode)
     // Рекурсивная функция для поиска и обновления узла
     const findAndUpdateNode = (nodes) => {
       for (const node of nodes) {
         if (node._id.toString() === parentId) {
           // Найден узел с соответствующим parentId
           const newNodeObject = {
-            nodeID: newNode,
+            nodeID: newNode.ID,
             subnodes: [],
-            _id: new mongoose.Types.ObjectId(),
+            isCategory: newNode.isCategory ? newNode.isCategory : false,
+            _id: newNode._id,
           };
           node.subnodes.push(newNodeObject);
           planningDocument.save(); // Сохранение изменений
@@ -1715,17 +1962,47 @@ app.post('/api/addChildNodeInTree', async (req, res) => {
     findAndUpdateNode(branch.planningTypes.find(pt => pt.type === planningType)?.nodes || []);
 
     if (success) {
-      return res.status(200).json({ success: true });
+
+      // Now we need to update the node itself with the new parentCategoryID
+      let updateFields = {}
+      if (newNode.isCategory) {
+        updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityCategory.parentCategory`] = parentId;
+      } else {
+        updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.parentCategory`] = parentId;
+      }
+    
+      // Saving target node
+      const resp = await NodeModel.updateOne(
+        { 
+            gameID, 
+            'branches': { $elemMatch: { 'branch': branchName } },
+            'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
+            'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': newNode.ID } },
+        },
+        {
+            $set: updateFields,
+        },
+        { 
+            arrayFilters: [
+                { 'branch.branch': branchName },
+                { 'planningType.type': 'entity' },
+                { 'node.nodeID': newNode.ID }
+            ],
+            new: true
+        }
+      );
+
+      return { status: 200, success: true };
     } else {
       // Если не найден узел с указанным parentId
-      return res.status(404).json({ error: 'Node with parentId not found' });
+      return { status: 404, success: false, error: 'Node with parentId not found' };
     }
 
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    return { status: 500, success: false, error: 'Internal Server Error' };
   }
-});
+}
 app.post('/api/removeNodeFromTree', async (req, res) => {
   try {
     const { gameID, branchName, planningType, nodeID } = req.body;
@@ -1752,6 +2029,7 @@ app.post('/api/removeNodeFromTree', async (req, res) => {
         if (node._id.toString() === nodeID) {
           // Найден узел с соответствующим nodeID
           nodes.pull(node);
+          removeChildrenInheritance(node)
           planningDocument.save(); // Сохранение изменений
           success = true;
           return;
@@ -1774,6 +2052,23 @@ app.post('/api/removeNodeFromTree', async (req, res) => {
     // Начало поиска и удаления узла
     findAndRemoveNode(targetPlanningType.nodes);
 
+    function removeChildrenInheritance(node) {
+
+      const iterateChildren = (children) => {
+        for (const n of children) {
+
+          removeNodeInheritance(gameID, branchName, n.nodeID, n.isCategory)
+
+          if (n.subnodes && n.subnodes.length > 0) {
+            iterateChildren(n.subnodes);
+          }
+        }
+
+      };
+      removeNodeInheritance(gameID, branchName, node.nodeID, node.isCategory)
+      iterateChildren(node.subnodes)
+    }
+
     if (success) {
       return res.status(200).json({ success: true });
     } else {
@@ -1789,19 +2084,23 @@ app.post('/api/removeNodeFromTree', async (req, res) => {
 app.post('/api/moveNodeInTree', async (req, res) => {
   const { gameID, branchName, planningType, nodeToMove, destinationID } = req.body;
 
+  const response = await moveNodeInPlanningTree(gameID, branchName, planningType, nodeToMove, destinationID)
+  res.status(200).json({ success: true, message: 'Node moved successfully' });
+});
+async function moveNodeInPlanningTree( gameID, branchName, planningType, nodeToMove, destinationID ) {
   try {
     // Найти документ PlanningTreeModel по gameID
     const planningTree = await PlanningTreeModel.findOne({ gameID });
 
     if (!planningTree) {
-      return res.status(404).json({ message: 'PlanningTree not found' });
+      // return res.status(404).json({ message: 'PlanningTree not found' });
     }
 
     // Найти ветку с соответствующим именем
     const branchIndex = planningTree.branches.findIndex((b) => b.branch === branchName);
 
     if (branchIndex === -1) {
-      return res.status(404).json({ message: 'Branch not found' });
+      // return res.status(404).json({ message: 'Branch not found' });
     }
 
     // Найти планировочный тип с соответствующим типом
@@ -1810,35 +2109,25 @@ app.post('/api/moveNodeInTree', async (req, res) => {
     );
 
     if (planningTypeIndex === -1) {
-      return res.status(404).json({ message: 'PlanningType not found' });
+      // return res.status(404).json({ message: 'PlanningType not found' });
     }
 
     // Найти ноду, куда нужно переместить
     const destinationNode = findNodeById(planningTree.branches[branchIndex].planningTypes[planningTypeIndex].nodes, destinationID);
 
     if (!destinationNode) {
-      return res.status(404).json({ message: 'Destination node not found' });
+      // return res.status(404).json({ message: 'Destination node not found' });
     }
 
     // Удалить ноду из исходного места
     const removedNode = removeNodeById(planningTree.branches[branchIndex].planningTypes[planningTypeIndex].nodes, nodeToMove._id)
-
-    if (removedNode === undefined) {
-      return res.status(404).json({ message: 'Node to remove not found' });
-    }
-
+    if (!removedNode) return
     // Переместить ноду в новое место
     const findAndUpdateNode = async (nodes) => {
       for (const node of nodes) {
         if (node._id.toString() === destinationID) {
           // Найден узел с соответствующим parentId
-          const newNodeObject = {
-            nodeID: nodeToMove.ID,
-            gameplayName: nodeToMove.gameplayName,
-            isGameplay: nodeToMove.isGameplay,
-            subnodes: nodeToMove.subnodes,
-          };
-          node.subnodes.push(newNodeObject);
+          node.subnodes.push(removedNode);
           return;
         }
 
@@ -1850,12 +2139,482 @@ app.post('/api/moveNodeInTree', async (req, res) => {
     };
     // Начало поиска и обновления узла
     findAndUpdateNode(planningTree.branches[branchIndex].planningTypes.find(pt => pt.type === planningType)?.nodes || []);
-
+    
     await planningTree.save();
-    res.status(200).json({ success: true, message: 'Node moved successfully' });
+    
+    if (planningType === 'entity') {
+      await resolveEntityObjAfterMoving(gameID, branchName, nodeToMove, destinationID)
+    }
+
+    // res.status(200).json({ success: true, message: 'Node moved successfully' });
   } catch (error) {
     console.error('Error moving node in tree:', error);
-    res.status(500).json({ message: 'Internal Server Error' });
+    // res.status(500).json({ message: 'Internal Server Error' });
+  }
+}
+async function removeNodeInheritance(gameID, branch, nodeID, isCategory) {
+
+console.log('Removing node inheritance for gameID:', 
+gameID, 'branch:', branch, 'nodeID:', nodeID, 'isCategory:', isCategory)
+
+
+  try {
+    const updateFields = {};
+
+    if (isCategory) {
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityCategory.parentCategory`] = '';
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityCategory.inheritedCategories`] = [];
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityCategory.inheritedConfigs`] = '';
+    } else {
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.parentCategory`] = '';
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.inheritedCategories`] = [];
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.inheritedConfigs`] = '';
+    }
+  
+    // Saving target node
+    const resp = await NodeModel.updateOne(
+      { 
+          gameID, 
+          'branches': { $elemMatch: { 'branch': branch } },
+          'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
+          'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': nodeID } }
+      },
+      {
+          $set: updateFields,
+      },
+      { 
+          arrayFilters: [
+              { 'branch.branch': branch },
+              { 'planningType.type': 'entity' },
+              { 'node.nodeID': nodeID }
+          ],
+          new: true
+      }
+    );
+    console.log({ success: true, message: 'Entity updated successfully' });
+  } catch (error) {
+    console.error(error);
+  }
+}
+// It is crucial to resolve existing configs. What do we want to do:
+// 1. Change entity's parentCategory ID
+// 2. Change inheritedCategories array to know which categories are inherited now
+// 3. Loop through inheritedCategories & existing inheritedConfigs, removing all configs that are now not inherited
+// resolveEntityObjAfterMoving(
+//   'c60079e9-9b64-4cb7-a35d-4ccb1cf63864', 
+// 'development', 
+// 'b1f60bcb-4a7c-45d6-9cf6-558f8668e6a5', 
+// '65f770b196a5dfe2ad8da040')
+async function resolveEntityObjAfterMoving(gameID, branch, node, newParentID) {
+  
+  async function getTree() {
+
+    const planningTree = await PlanningTreeModel.findOne({ gameID });
+
+    if (!planningTree) {
+      return { success: false, message: 'PlanningTree not found' };
+    }
+
+    // Найти ветку с соответствующим именем
+    const branchIndex = planningTree.branches.findIndex((b) => b.branch === branch);
+
+    if (branchIndex === -1) {
+      return { success: false, message: 'Branch not found' };
+    }
+
+    // Найти планировочный тип с соответствующим типом
+    const planningTypeIndex = planningTree.branches[branchIndex].planningTypes.findIndex(
+      (p) => p.type === 'entity'
+    );
+
+    if (planningTypeIndex === -1) {
+      return { success: false, message: 'PlanningType not found' };
+    }
+
+    // Найти ноду, куда нужно переместить
+    const nodesTree = planningTree.branches[branchIndex].planningTypes[planningTypeIndex].nodes;
+
+    if (!nodesTree) {
+      return { success: false, message: 'Destination node not found' };
+    }
+    return { success: true, nodes: nodesTree[0] };
+  }
+  let planningTree = await getTree()
+  if (planningTree.success === false) return
+  planningTree = planningTree.nodes
+
+  async function getNodes() {
+    const nodes = await NodeModel.aggregate([
+      { $match: { gameID } }, 
+      { $unwind: "$branches" }, 
+      { $match: { "branches.branch": branch } }, 
+      { $unwind: "$branches.planningTypes" }, 
+      { $match: { "branches.planningTypes.type": "entity" } },
+      { $unwind: "$branches.planningTypes.nodes" },
+      { $unset: ["branches.planningTypes.nodes.entityCategory.mainConfigs"] },
+      { $unset: ["branches.planningTypes.nodes.entityBasic.mainConfigs"] },
+      { $unset: ["branches.planningTypes.nodes.name"] },
+      { $unset: ["branches.planningTypes.nodes.analyticsEvents"] },
+      { $replaceRoot: { newRoot: "$branches.planningTypes.nodes" } }
+    ]);
+
+    if (!nodes) {
+        return { success: false, error: 'No document found' };
+    }
+
+    return {success: true, nodes: nodes};
+  }
+  let nodes = await getNodes()
+  if (nodes.success === false) return
+  // Losing the unnecessary "success" field
+  nodes = nodes.nodes
+
+  let targetNode = nodes.find(n => n.nodeID === node.ID)
+  let entityConfigField = targetNode.entityCategory !== undefined ? 'entityCategory' : 'entityBasic'
+
+
+  function getInheritance(parentCategoryID) {
+    let tempCategories = []
+
+    function getInheritanceRecursively(parentCategoryID) {
+  
+      let inheritedNodeID = findNodeById(planningTree.subnodes, parentCategoryID)
+  
+      // Check if null. If so, it's Root
+      if (inheritedNodeID === null) {
+        if (planningTree._id.toString() === parentCategoryID) {
+          inheritedNodeID = planningTree
+        }
+      }
+  
+      let entityConfigField = inheritedNodeID.isCategory ? 'entityCategory' : 'entityBasic'
+  
+      inheritedNodeID = inheritedNodeID.nodeID
+  
+      let inheritedNodeParentID = nodes.find(n => n.nodeID === inheritedNodeID)[entityConfigField].parentCategory
+  
+      // If this node is nested, go recursive until we hit the root
+      tempCategories.push(inheritedNodeID)
+      if (inheritedNodeParentID && inheritedNodeParentID !== '') {
+  
+        getInheritanceRecursively(inheritedNodeParentID)
+  
+      }
+    }
+    getInheritanceRecursively(parentCategoryID)
+
+    return tempCategories
+  }
+  let newInheritedCategories = getInheritance(newParentID)
+  // console.log('Target nodes new cats:', newInheritedCategories)
+  
+
+  function clearInheritedConfigs() {
+    const inheritedCategoriesSet = new Set(newInheritedCategories);
+
+    let nodeConfigs = JSON.parse(targetNode[entityConfigField].inheritedConfigs)
+
+    const filteredInheritedConfigs = nodeConfigs.filter(config => {
+        const { nodeID } = config;
+        return inheritedCategoriesSet.has(nodeID);
+    });
+    return filteredInheritedConfigs
+  }
+  const newInheritedConfigs = JSON.stringify(clearInheritedConfigs())
+
+  targetNode = {
+    ...targetNode,
+    [entityConfigField]: {
+      ...targetNode[entityConfigField],
+      parentCategory: newParentID,
+      inheritedCategories: newInheritedCategories,
+      inheritedConfigs: newInheritedConfigs
+    }
+  }
+  // console.log('Resulted node:', targetNode)
+
+  const updateFields = {};
+  updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node]
+  .${entityConfigField}.parentCategory`] = targetNode[entityConfigField].parentCategory;
+  updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node]
+  .${entityConfigField}.inheritedCategories`] = targetNode[entityConfigField].inheritedCategories;
+  updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node]
+  .${entityConfigField}.inheritedConfigs`] = targetNode[entityConfigField].inheritedConfigs;
+
+
+  // Saving target node
+  const saveNode = await NodeModel.updateOne(
+    { 
+        gameID, 
+        'branches': { $elemMatch: { 'branch': branch } },
+        'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
+        'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': node.ID } }
+    },
+    {
+        $set: updateFields,
+    },
+    { 
+        arrayFilters: [
+            { 'branch.branch': branch },
+            { 'planningType.type': 'entity' },
+            { 'node.nodeID': node.ID }
+        ],
+        new: true
+    }
+  );
+  let updateLocalNodes = nodes.find(n => n.nodeID === targetNode.nodeID)
+  updateLocalNodes = Object.assign(updateLocalNodes, targetNode)
+
+  // Now we must also resolve all children nodes' inheritedCategories
+  async function resolveChildren() {
+
+    const parentNode = findNodeById(planningTree.subnodes, node._id)
+
+    if (parentNode.subnodes && parentNode.subnodes.length > 0) {
+
+      parentNode.subnodes.forEach(subnode => {
+
+        async function resolveChildRecursively(subnode) {
+
+          
+          let child = nodes.find(n => n.nodeID === subnode.nodeID)
+
+          let entityConfigField = child.entityCategory ? 'entityCategory' : 'entityBasic'
+
+          let inheritedCategories = getInheritance(child[entityConfigField].parentCategory)
+  
+          const updateFields = {};
+          updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node]
+          .${entityConfigField}.inheritedCategories`] = inheritedCategories;
+        
+          // console.log('Saving child inhcats:', inheritedCategories)
+        
+          // Saving child node
+          const saveNode = NodeModel.updateOne(
+            { 
+                gameID, 
+                'branches': { $elemMatch: { 'branch': branch } },
+                'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
+                'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': child.nodeID } }
+            },
+            {
+                $set: updateFields,
+            },
+            { 
+                arrayFilters: [
+                    { 'branch.branch': branch },
+                    { 'planningType.type': 'entity' },
+                    { 'node.nodeID': child.nodeID }
+                ],
+                new: true
+            }
+          );
+
+          if (subnode.subnodes && subnode.subnodes.length > 0) {
+            subnode.subnodes.forEach(subnode => {
+              resolveChildRecursively(subnode)
+            })
+          }
+        }
+        resolveChildRecursively(subnode)
+
+      })
+
+
+    }
+
+  }
+  resolveChildren()
+
+  return
+}
+
+app.post('/api/saveEntityBasicInfo', async (req, res) => {
+
+  const { gameID, branch, nodeID, entityID, nodeName, isCategory } = req.body;
+  try {
+    const updateFields = {};
+
+    if (isCategory) {
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityCategory.name`] = nodeName;
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityCategory.categoryID`] = entityID;
+    } else {
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.name`] = nodeName;
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.entityID`] = entityID;
+    }
+  
+    // Saving target node
+    const resp = await NodeModel.updateOne(
+      { 
+          gameID, 
+          'branches': { $elemMatch: { 'branch': branch } },
+          'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
+          'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': nodeID } }
+      },
+      {
+          $set: updateFields,
+      },
+      { 
+          arrayFilters: [
+              { 'branch.branch': branch },
+              { 'planningType.type': 'entity' },
+              { 'node.nodeID': nodeID }
+          ],
+          new: true
+      }
+    );
+    res.status(200).json({ success: true, message: 'Entity updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+});
+app.post('/api/saveEntityRoles', async (req, res) => {
+
+  const { gameID, branch, nodeID, isCurrency, isInAppPurchase, realValueBase } = req.body;
+
+  try {
+    const updateFields = {};
+    updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.isCurrency`] = isCurrency;
+    updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.isInAppPurchase`] = isInAppPurchase;
+    updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.realValueBase`] = realValueBase;
+  
+    // Saving target node
+    await NodeModel.updateOne(
+      { 
+          gameID, 
+          'branches': { $elemMatch: { 'branch': branch } },
+          'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
+          'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': nodeID } }
+      },
+      {
+          $set: updateFields,
+      },
+      { 
+          arrayFilters: [
+              { 'branch.branch': branch },
+              { 'planningType.type': 'entity' },
+              { 'node.nodeID': nodeID }
+          ],
+          new: true
+      }
+    );
+    res.status(200).json({ success: true, message: 'Entity updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+app.post('/api/saveEntityIcon', async (req, res) => {
+
+  const { gameID, branch, nodeID, entityIcon } = req.body;
+
+  try {
+    const updateFields = {};
+    updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.entityIcon`] = entityIcon;
+  
+    // Saving target node
+    await NodeModel.updateOne(
+      { 
+          gameID, 
+          'branches': { $elemMatch: { 'branch': branch } },
+          'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
+          'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': nodeID } }
+      },
+      {
+          $set: updateFields,
+      },
+      { 
+          arrayFilters: [
+              { 'branch.branch': branch },
+              { 'planningType.type': 'entity' },
+              { 'node.nodeID': nodeID }
+          ],
+          new: true
+      }
+    );
+    res.status(200).json({ success: true, message: 'Entity updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+app.post('/api/saveEntityMainConfigs', async (req, res) => {
+
+  const { gameID, branch, nodeID, mainConfigs, isCategory } = req.body;
+
+  try {
+    const updateFields = {};
+
+    if (isCategory) {
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityCategory.mainConfigs`] = mainConfigs;
+    } else {
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.mainConfigs`] = mainConfigs;
+    }  
+
+    // Saving target node
+    await NodeModel.updateOne(
+      { 
+          gameID, 
+          'branches': { $elemMatch: { 'branch': branch } },
+          'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
+          'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': nodeID } }
+      },
+      {
+          $set: updateFields,
+      },
+      { 
+          arrayFilters: [
+              { 'branch.branch': branch },
+              { 'planningType.type': 'entity' },
+              { 'node.nodeID': nodeID }
+          ],
+          new: true
+      }
+    );
+    res.status(200).json({ success: true, message: 'Entity updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+app.post('/api/saveEntityInheritedConfigs', async (req, res) => {
+
+  const { gameID, branch, nodeID, inheritedConfigs, isCategory } = req.body;
+
+  try {
+    const updateFields = {};
+
+    if (isCategory) {
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityCategory.inheritedConfigs`] = inheritedConfigs;
+    } else {
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.inheritedConfigs`] = inheritedConfigs;
+    }
+  
+    // Saving target node
+    await NodeModel.updateOne(
+      { 
+          gameID, 
+          'branches': { $elemMatch: { 'branch': branch } },
+          'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
+          'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': nodeID } }
+      },
+      {
+          $set: updateFields,
+      },
+      { 
+          arrayFilters: [
+              { 'branch.branch': branch },
+              { 'planningType.type': 'entity' },
+              { 'node.nodeID': nodeID }
+          ],
+          new: true
+      }
+    );
+    res.status(200).json({ success: true, message: 'Entity updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
@@ -3445,6 +4204,9 @@ app.post('/api/getAllAnalyticsEvents', async (req, res) => {
                     eventName: event
                       ? event.branches.find(b => b.branch === branchName)?.events.find(e => e.eventID === eventID)?.eventName || 'Event not found'
                       : 'Event not found',
+                    eventCodeName: event
+                      ? event.branches.find(b => b.branch === branchName)?.events.find(e => e.eventID === eventID)?.eventCodeName || 'Event ID not found'
+                      : 'Event ID not found',
                   };
                 })),
               }],

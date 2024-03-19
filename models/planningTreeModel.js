@@ -7,6 +7,7 @@ const planningTreeSubnodeSchema = new mongoose.Schema({
   },
   isGameplay: Boolean,
   gameplayName: String,
+  isCategory: Boolean,
   positionX: String,
   positionY: String,
   relations: [String],
