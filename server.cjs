@@ -1064,6 +1064,127 @@ app.post('/api/createEntity', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+app.post('/api/createEntityBulk', async (req, res) => {
+  try {
+    const { gameID, branch, entityObjArray } = req.body;
+
+    // Проверка наличия обязательных полей в запросе
+    if (!gameID || !branch || !entityObjArray || entityObjArray.length === 0) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const query = {
+      gameID: gameID,
+      'branches.branch': branch
+    };
+
+    const newNodes = entityObjArray.map(entityObj => {
+      const newNodeID = uuid.v4();
+      return {
+        nodeID: newNodeID,
+        name: entityObj.entityName,
+        description: entityObj.entityDescription,
+        techDescription: entityObj.entityTechDescription,
+        entityCategory: entityObj.entityCategory,
+        entityBasic: entityObj.entityBasic
+      };
+    });
+    
+    const update = {
+      $push: {
+        'branches.$.planningTypes.$[type].nodes': {
+          $each: newNodes
+        }
+      }
+    };
+    
+    const options = {
+      arrayFilters: [
+        { 'type.type': 'entity' } // фильтруем нужный тип планирования
+      ],
+      new: true // чтобы получить обновленный документ
+    };
+    
+    await NodeModel.findOneAndUpdate(query, update, options)
+
+    let nodesToPutInParents = [];
+
+    newNodes.forEach(e => {
+      async function tryToAddEntityToParent(entityObj) {
+        console.log('Adding entity:', entityObj, 'Params:', gameID, branch, entityObj, entityObj.nodeID)
+        // If not empty, it is basic entity. Category otherwise
+        if (entityObj.entityBasic && entityObj.entityBasic.entityID !== '') {
+          // Trying to put it under parent category immediately
+          if (entityObj.entityBasic.parentCategory !== '') {
+            nodesToPutInParents.push(entityObj);
+          }
+        }
+      }
+      tryToAddEntityToParent(e)
+    });
+    if (nodesToPutInParents.length > 0) {
+      await addBasicEntityToParentInBulk(gameID, branch, nodesToPutInParents.map(e => e.entityBasic.parentCategory), nodesToPutInParents.map(e => e.nodeID), nodesToPutInParents.map(e => e.entityBasic.isCategory))
+    }
+
+    res.status(201).json({ message: 'Empty node created successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+async function addBasicEntityToParentInBulk(gameID, branch, parentIds, newNodes, isCategories) {
+  try {
+    const planningDocument = await PlanningTreeModel.findOne({ gameID }).exec();
+
+    if (!planningDocument) {
+      return { status: 404, success: false, error: 'Planning document not found' };
+    }
+
+    const foundBranch = planningDocument.branches.find(b => b.branch === branch);
+
+    if (!foundBranch) {
+      return { status: 404, success: false, error: 'Branch not found' };
+    }
+
+    let success = false;
+
+    const findAndUpdateNode = (nodes, index) => {
+      for (const node of nodes) {
+        console.log('Comparing', node._id.toString(), 'with', parentIds[index]);
+        if (node._id.toString() === parentIds[index]) {
+          const newNodeObject = {
+            nodeID: newNodes[index],
+            subnodes: [],
+            _id: new mongoose.Types.ObjectId(),
+            isCategory: isCategories[index]
+          };
+          node.subnodes.push(newNodeObject);
+          success = true;
+          return;
+        }
+
+        if (node.subnodes.length > 0) {
+          findAndUpdateNode(node.subnodes, index);
+        }
+      }
+    };
+
+    parentIds.forEach((parentId, index) => {
+      findAndUpdateNode(foundBranch.planningTypes.find(pt => pt.type === 'entity')?.nodes || [], index);
+    });
+
+    planningDocument.save();
+
+    if (success) {
+      return { status: 200, success: true };
+    } else {
+      return { status: 404, success: false, error: 'Node with parentId not found' };
+    }
+  } catch (error) {
+    console.error(error);
+    return { status: 500, success: false, error: 'Internal Server Error' };
+  }
+}
 async function addEntityToParent(gameID, branch, parentId, newNode, isCategory) {
   try {
 
@@ -1095,7 +1216,7 @@ async function addEntityToParent(gameID, branch, parentId, newNode, isCategory) 
             isCategory: isCategory
           };
           node.subnodes.push(newNodeObject);
-          planningDocument.save(); // Сохранение изменений
+          
           success = true;
           return;
         }
@@ -1108,7 +1229,9 @@ async function addEntityToParent(gameID, branch, parentId, newNode, isCategory) 
     };
 
     // Начало поиска и обновления узла
-    findAndUpdateNode(foundBranch.planningTypes.find(pt => pt.type === 'entity')?.nodes || []);
+    await findAndUpdateNode(foundBranch.planningTypes.find(pt => pt.type === 'entity')?.nodes || []);
+    planningDocument.save();
+
 
     if (success) {
       return { status: 200, success: true };
@@ -2253,6 +2376,7 @@ async function resolveEntityObjAfterMoving(gameID, branch, node, newParentID) {
       { $unwind: "$branches.planningTypes.nodes" },
       { $unset: ["branches.planningTypes.nodes.entityCategory.mainConfigs"] },
       { $unset: ["branches.planningTypes.nodes.entityBasic.mainConfigs"] },
+      { $unset: ["branches.planningTypes.nodes.entityBasic.entityIcon"] },
       { $unset: ["branches.planningTypes.nodes.name"] },
       { $unset: ["branches.planningTypes.nodes.analyticsEvents"] },
       { $replaceRoot: { newRoot: "$branches.planningTypes.nodes" } }
@@ -2429,6 +2553,68 @@ async function resolveEntityObjAfterMoving(gameID, branch, node, newParentID) {
   return
 }
 
+app.post('/api/getEntitiesByNodeIDs', async (req, res) => {
+  try {
+    const { gameID, branch, nodeIDs } = req.body;
+
+    const entities = await NodeModel.aggregate([
+      { $match: { gameID } }, 
+      { $unwind: "$branches" }, 
+      { $match: { "branches.branch": branch } }, 
+      { $unwind: "$branches.planningTypes" }, 
+      { $match: { "branches.planningTypes.type": "entity" } },
+      { $unwind: "$branches.planningTypes.nodes" },
+      { $match: { "branches.planningTypes.nodes.nodeID": { $in: nodeIDs } } },
+      { $unset: ["branches.planningTypes.nodes.entityBasic.mainConfigs"] },
+      { $unset: ["branches.planningTypes.nodes.entityBasic.inheritedConfigs"] },
+      { $unset: ["branches.planningTypes.nodes.analyticsEvents"] },
+      { $unset: ["branches.planningTypes.nodes.entityCategory.parentCategory"] },
+      { $replaceRoot: { newRoot: "$branches.planningTypes.nodes" } }
+    ]);
+
+    if (!entities) {
+      return res.status(404).json({ message: 'Entity not found' });
+    }
+    res.status(200).json({ success: true, entities });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+app.post('/api/getEntitiesIDs', async (req, res) => {
+  try {
+    const { gameID, branch } = req.body;
+
+    const entities = await NodeModel.aggregate([
+      { $match: { gameID } }, 
+      { $unwind: "$branches" }, 
+      { $match: { "branches.branch": branch } }, 
+      { $unwind: "$branches.planningTypes" }, 
+      { $match: { "branches.planningTypes.type": "entity" } },
+      { $unwind: "$branches.planningTypes.nodes" },
+
+      { $unset: ["branches.planningTypes.nodes.entityBasic.entityIcon"] },
+      { $unset: ["branches.planningTypes.nodes.entityBasic.parentCategory"] },
+      { $unset: ["branches.planningTypes.nodes.entityBasic.mainConfigs"] },
+      { $unset: ["branches.planningTypes.nodes.entityBasic.inheritedConfigs"] },
+
+      { $match: { "branches.planningTypes.nodes.entityCategory": { $exists: false } } },
+
+      { $unset: ["branches.planningTypes.nodes.analyticsEvents"] },
+
+      { $replaceRoot: { newRoot: "$branches.planningTypes.nodes" } }
+    ]);
+
+    if (!entities) {
+      return res.status(404).json({ message: 'Entity not found' });
+    }
+    res.status(200).json({ success: true, entities });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
 app.post('/api/saveEntityBasicInfo', async (req, res) => {
 
   const { gameID, branch, nodeID, entityID, nodeName, isCategory } = req.body;
@@ -2436,10 +2622,10 @@ app.post('/api/saveEntityBasicInfo', async (req, res) => {
     const updateFields = {};
 
     if (isCategory) {
-      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityCategory.name`] = nodeName;
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].name`] = nodeName;
       updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityCategory.categoryID`] = entityID;
     } else {
-      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.name`] = nodeName;
+      updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].name`] = nodeName;
       updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].entityBasic.entityID`] = entityID;
     }
   
@@ -7549,6 +7735,56 @@ app.post('/api/analytics/getActiveSessions', async (req, res) => {
 
 });
 
+
+app.post('/api/analytics/getOfferSalesAndRevenue', async (req, res) => {
+  const {gameID, branchName, filterDate, filterSegments, offerID} = req.body
+
+  try {
+
+    const responseData = [
+      {
+        timestamp: '2024-03-18T10:00:00.000Z',
+        sales: 100,
+        revenue: 120,
+      },
+      {
+        timestamp: '2024-03-19T10:00:00.000Z',
+        sales: 150,
+        revenue: 165,
+      },
+      {
+        timestamp: '2024-03-20T10:00:00.000Z',
+        sales: 200,
+        revenue: 456,
+      },
+      {
+        timestamp: '2024-03-21T10:00:00.000Z',
+        sales: 312,
+        revenue: 432,
+      },
+      {
+        timestamp: '2024-03-22T10:00:00.000Z',
+        sales: 566,
+        revenue: 865,
+      },
+      {
+        timestamp: '2024-03-23T10:00:00.000Z',
+        sales: 642,
+        revenue: 777,
+      },
+      {
+        timestamp: '2024-03-24T10:00:00.000Z',
+        sales: 312,
+        revenue: 56,
+      },
+    ]
+
+    res.status(200).json({success: true, message: {data: responseData, granularity: 'day', deltaValue: 25}})
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+});
 
 
 app.post('/api/testFunc', async (req, res) => {
