@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.3.0
+2024-03-19
+
+### Features
+
+- many new APIs (4e1bd09d5fb6a1274b6ddbdc4c379fcfbe882c4f)
+
 ## 1.2.0
 2024-03-09
 
