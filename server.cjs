@@ -35,6 +35,10 @@ const AnalyticsEvents = require('./models/analyticsevents')
 const Segments = require('./models/segmentsModel')
 const PlayerWarehouse = require('./models/playerWarehouseModel')
 const Relations = require('./models/relationsModel.js')
+const Localization = require('./models/localizationModel.js')
+const Offers = require('./models/offersModel.js')
+
+
 const segmentsLib = require('./segmentsLib.cjs')
 const druidLib = require('./druidLib.cjs')
 const playerWarehouseLib = require('./playerWarehouseLib.cjs')
@@ -594,7 +598,7 @@ app.post('/api/createGame', async (req, res) => {
     };
     await PlanningTreeModel.create(newTree);
 
-    // Creating new game doc in Segments
+    // Creating new game doc in Relations
     const newRelations = new Relations({
       gameID: newGameID,
       branches: [
@@ -616,6 +620,57 @@ app.post('/api/createGame', async (req, res) => {
       ],
     });
     await newRelations.save();
+
+    // Creating new game doc in Localization
+    const newLocalization = new Localization({
+      gameID: newGameID,
+      branches: [
+        {
+          branch: 'development',
+          localization: {
+            offers: [],
+            entities: [],
+            custom: [],
+          },
+        },
+        {
+          branch: 'stage',
+          localization: {
+            offers: [],
+            entities: [],
+            custom: [],
+          },
+        },
+        {
+          branch: 'production',
+          localization: {
+            offers: [],
+            entities: [],
+            custom: [],
+          },
+        },
+      ],
+    });
+    await newLocalization.save();
+
+    const newOffers = new Offers({
+      gameID: newGameID,
+      branches: [
+        {
+          branch: 'development',
+          offers: [],
+        },
+        {
+          branch: 'stage',
+          offers: [],
+        },
+        {
+          branch: 'production',
+          offers: [],
+        },
+      ],
+    });
+    await newOffers.save();
 
 
     res.json({ success: true, gameID: newGameID });
@@ -2458,34 +2513,37 @@ async function resolveEntityObjAfterMoving(gameID, branch, node, newParentID) {
   // console.log('Resulted node:', targetNode)
 
   const updateFields = {};
-  updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node]
-  .${entityConfigField}.parentCategory`] = targetNode[entityConfigField].parentCategory;
-  updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node]
-  .${entityConfigField}.inheritedCategories`] = targetNode[entityConfigField].inheritedCategories;
-  updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node]
-  .${entityConfigField}.inheritedConfigs`] = targetNode[entityConfigField].inheritedConfigs;
+  updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].${entityConfigField}.parentCategory`] = targetNode[entityConfigField].parentCategory;
+  updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].${entityConfigField}.inheritedCategories`] = targetNode[entityConfigField].inheritedCategories;
+  updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].${entityConfigField}.inheritedConfigs`] = targetNode[entityConfigField].inheritedConfigs;
 
+  // console.log('Saving target fields', updateFields)
 
   // Saving target node
-  const saveNode = await NodeModel.updateOne(
-    { 
-        gameID, 
-        'branches': { $elemMatch: { 'branch': branch } },
-        'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
-        'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': node.ID } }
-    },
-    {
-        $set: updateFields,
-    },
-    { 
-        arrayFilters: [
-            { 'branch.branch': branch },
-            { 'planningType.type': 'entity' },
-            { 'node.nodeID': node.ID }
-        ],
-        new: true
-    }
-  );
+  try {
+    const saveNode = await NodeModel.updateOne(
+      { 
+          gameID, 
+          'branches': { $elemMatch: { 'branch': branch } },
+          'branches.planningTypes': { $elemMatch: { 'type': 'entity' } },
+          'branches.planningTypes.nodes': { $elemMatch: { 'nodeID': node.ID } }
+      },
+      {
+          $set: updateFields,
+      },
+      { 
+          arrayFilters: [
+              { 'branch.branch': branch },
+              { 'planningType.type': 'entity' },
+              { 'node.nodeID': node.ID }
+          ],
+          new: true
+      }
+    );
+    // console.log({ saveNode, success: true, message: 'Entity updated successfully' });
+  } catch (error) {
+    console.error('Error saving node while moving in tree:', error);
+  }
   let updateLocalNodes = nodes.find(n => n.nodeID === targetNode.nodeID)
   updateLocalNodes = Object.assign(updateLocalNodes, targetNode)
 
@@ -2508,8 +2566,7 @@ async function resolveEntityObjAfterMoving(gameID, branch, node, newParentID) {
           let inheritedCategories = getInheritance(child[entityConfigField].parentCategory)
   
           const updateFields = {};
-          updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node]
-          .${entityConfigField}.inheritedCategories`] = inheritedCategories;
+          updateFields[`branches.$[branch].planningTypes.$[planningType].nodes.$[node].${entityConfigField}.inheritedCategories`] = inheritedCategories;
         
           // console.log('Saving child inhcats:', inheritedCategories)
         
@@ -2603,6 +2660,36 @@ app.post('/api/getEntitiesIDs', async (req, res) => {
       { $unset: ["branches.planningTypes.nodes.analyticsEvents"] },
 
       { $replaceRoot: { newRoot: "$branches.planningTypes.nodes" } }
+    ]);
+
+    if (!entities) {
+      return res.status(404).json({ message: 'Entity not found' });
+    }
+    res.status(200).json({ success: true, entities });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+app.post('/api/getEntitiesNames', async (req, res) => {
+  try {
+    const { gameID, branch } = req.body;
+
+    const entities = await NodeModel.aggregate([
+      { $match: { gameID } }, 
+      { $unwind: "$branches" }, 
+      { $match: { "branches.branch": branch } }, 
+      { $unwind: "$branches.planningTypes" }, 
+      { $match: { "branches.planningTypes.type": "entity" } },
+      { $unwind: "$branches.planningTypes.nodes" },
+      { $replaceRoot: { newRoot: "$branches.planningTypes.nodes" } },
+      { 
+        $project: {
+          _id: 0,
+          name: 1, 
+          nodeID: 1 
+        }
+      }
     ]);
 
     if (!entities) {
@@ -2803,6 +2890,447 @@ app.post('/api/saveEntityInheritedConfigs', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+// Localization
+async function updateLocalization(gameID, branch, type, translationObjects) {
+
+  let fieldToUpdate;
+  switch (type) {
+    case 'offers':
+      fieldToUpdate = `branches.$[branch].localization.offers`;
+      break;
+    case 'entities':
+      fieldToUpdate = `branches.$[branch].localization.entities`;
+      break;
+    case 'custom':
+      fieldToUpdate = `branches.$[branch].localization.custom`;
+      break;
+    default:
+      return res.status(400).json({ error: 'Invalid localization type' });
+  }
+
+  async function getLocalizationDocument(type) {
+    let array = []
+    array = await Localization.aggregate([
+      { $match: { gameID } }, 
+      { $unwind: "$branches" }, 
+      { $match: { "branches.branch": branch } }, 
+      { $unwind: "$branches.localization" }, 
+      { $unwind: `$branches.localization.${type}` },
+      { $replaceRoot: { newRoot: `$branches.localization.${type}` } }
+    ]);
+    return array;
+  }
+  
+  let localizations = await getLocalizationDocument(type)
+  
+  translationObjects.forEach(translation => {
+    const sid = translation.sid;
+    const key = translation.key;
+    let values = []
+    Object.keys(translation.translations).forEach(obj => {
+      values.push({
+        code: obj,
+        value: translation.translations[obj]
+      })
+    })
+  
+    const exists = localizations.some(localization => localization.sid === sid)
+    if (exists) {
+      const index = localizations.findIndex(localization => localization.sid === sid)
+      localizations[index].translations = values
+      localizations[index].key = key
+    } else {
+      localizations.push({ sid: sid, key: key, translations: values })
+    }
+  });
+  
+  const filter = { gameID };
+  const arrayFilters = 
+  [
+    { 'gameID': gameID }, 
+    { 'branch.branch': branch }
+  ]
+  const result = await Localization.updateMany(filter, 
+    { 
+      $set: {[`${fieldToUpdate}`]: localizations}
+    }, 
+    { arrayFilters, upsert: true }).exec()
+}
+app.post('/api/updateLocalization', async (req, res) => {
+  const { gameID, branch, type, translationObjects } = req.body;
+
+  try {
+
+    await updateLocalization(gameID, branch, type, translationObjects)
+
+    res.status(200).json({ message: 'Localization updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+app.post('/api/getLocalization', async (req, res) => {
+  const { gameID, branch, type } = req.body;
+
+  try {
+    let fieldToUpdate;
+    switch (type) {
+      case 'offers':
+        fieldToUpdate = `branches.$[branch].localization.offers`;
+        break;
+      case 'entities':
+        fieldToUpdate = `branches.$[branch].localization.entities`;
+        break;
+      case 'custom':
+        fieldToUpdate = `branches.$[branch].localization.custom`;
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid localization type' });
+    }
+    async function getLocalizationDocument(type) {
+      let array = []
+      array = await Localization.aggregate([
+        { $match: { gameID } }, 
+        { $unwind: "$branches" }, 
+        { $match: { "branches.branch": branch } }, 
+        { $unwind: "$branches.localization" }, 
+        { $unwind: `$branches.localization.${type}` },
+        { $replaceRoot: { newRoot: `$branches.localization.${type}` } }
+      ]);
+      return array;
+    }
+
+    let localizations = await getLocalizationDocument(type)
+
+    res.status(200).json({ localizations: localizations, success: true, message: 'Localization fetched successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+app.post('/api/getLocalizationItems', async (req, res) => {
+  const { gameID, branch, type, sids } = req.body;
+
+  try {
+    let fieldToUpdate;
+    switch (type) {
+      case 'offers':
+        fieldToUpdate = `branches.$[branch].localization.offers`;
+        break;
+      case 'entities':
+        fieldToUpdate = `branches.$[branch].localization.entities`;
+        break;
+      case 'custom':
+        fieldToUpdate = `branches.$[branch].localization.custom`;
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid localization type' });
+    } 
+
+    async function getLocalizationDocument(type) {
+      let array = []
+      array = await Localization.aggregate([
+        { $match: { gameID } }, 
+        { $unwind: "$branches" }, 
+        { $match: { "branches.branch": branch } }, 
+        { $unwind: "$branches.localization" }, 
+        { $unwind: `$branches.localization.${type}` },
+        { $match: { [`branches.localization.${type}.sid`]: { $in: sids } } },
+        { $replaceRoot: { newRoot: `$branches.localization.${type}` } }
+      ]);
+      return array;
+    }
+
+    let localizations = await getLocalizationDocument(type)
+
+    res.status(200).json({ localizations: localizations, success: true, message: 'Localization fetched successfully' });
+  } catch (error) {
+    console.error('Error getting localization items:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
+app.post('/api/removeLocalizationItem', async (req, res) => {
+  const { gameID, branch, type, sid } = req.body;
+
+  try {
+    const result = await Localization.findOneAndUpdate(
+      { 
+        gameID, 
+        'branches.branch': branch 
+      },
+      { 
+        $pull: { 
+          [`branches.$[branch].localization.${type}`]: { 
+            sid: sid 
+          }
+        }
+      },
+      {
+        arrayFilters: [
+          { 'branch.branch': branch },
+        ],
+        new: true
+      }
+    ).exec();
+
+    res.status(200).json({ success: true, message: 'Localization item removed successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
+app.post('/api/changeLocalizationItemKey', async (req, res) => {
+  const { gameID, branch, type, sid, newKey } = req.body;
+
+  try {
+    const result = await Localization.findOneAndUpdate(
+      { 
+        gameID, 
+        'branches.branch': branch,
+        [`branches.localization.${type}.sid`]: sid
+      },
+      { 
+        $set: { 
+          [`branches.$[branch].localization.${type}.$.key`]: newKey 
+        }
+      },
+      {
+        arrayFilters: [
+          { 'branch.branch': branch },
+        ],
+        new: true
+      }
+    ).exec();
+
+    res.status(200).json({ success: true, message: 'Localization item changed successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
+
+app.post('/api/createNewOffer', async (req, res) => {
+  const { gameID, branch, offerObj } = req.body;
+  try {
+    // content, price-moneyCurr, triggers fields must be stringified from JSON
+    
+    const offer = {
+      offerID: offerObj.offerId,
+      offerName: offerObj.name,
+      offerCodeName: offerObj.offerCodeName,
+      offerIcon: offerObj.icon,
+
+      offerInGameName: offerObj.ingameNameStringId,
+      offerInGameDescription: offerObj.descrStringId,
+
+      offerTags: offerObj.tags,
+
+      offerPurchaseLimit: offerObj.purchaseLimit,
+      offerDuration: {
+        value: offerObj.duration.value,
+        timeUnit: offerObj.duration.timeUnit,
+      },
+
+      offerSegments: offerObj.segments,
+      offerTriggers: offerObj.triggers,
+
+      offerPrice: {
+        targetCurrency: offerObj.price.targetCurrency,
+        nodeID: offerObj.price.nodeID,
+        amount: offerObj.price.amount,
+        moneyCurr: offerObj.price.moneyCurr,
+      },
+
+      content: JSON.stringify(offerObj.content),
+    };
+    const result = await Offers.findOneAndUpdate(
+      { gameID },
+      { $addToSet: { 'branches.$[branch].offers': offer } },
+      { arrayFilters: [{ 'branch.branch': branch }], upsert: true, new: true }
+    ).exec();
+
+    const translationObjects = [
+      {
+        sid: offerObj.ingameNameStringId,
+        key: offerObj.ingameNameStringId,
+        translations: {
+          en: 'Localized name',
+        }
+      },
+      {
+        sid: offerObj.descrStringId,
+        key: offerObj.descrStringId,
+        translations: {
+          en: 'Localized description',
+        }
+      },
+    ]
+
+    await updateLocalization(gameID, branch, 'offers', translationObjects)
+
+    res.status(200).json({ success: true, message: 'Offer created successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
+app.post('/api/updateOffer', async (req, res) => {
+  const { gameID, branch, offerObj } = req.body;
+  try {
+    // content, price-moneyCurr, triggers fields must be stringified from JSON
+    
+    const offer = {
+      offerID: offerObj.offerId,
+      offerName: offerObj.name,
+      offerCodeName: offerObj.offerCodeName,
+      offerIcon: offerObj.icon,
+
+      offerInGameName: offerObj.ingameNameStringId,
+      offerInGameDescription: offerObj.descrStringId,
+
+      offerTags: offerObj.tags,
+
+      offerPurchaseLimit: offerObj.purchaseLimit,
+      offerDuration: {
+        value: offerObj.duration.value,
+        timeUnit: offerObj.duration.timeUnit,
+      },
+
+      offerSegments: offerObj.segments,
+      offerTriggers: offerObj.triggers,
+
+      offerPrice: {
+        targetCurrency: offerObj.price.targetCurrency,
+        nodeID: offerObj.price.nodeID,
+        amount: offerObj.price.amount,
+        moneyCurr: offerObj.price.moneyCurr,
+      },
+
+      content: JSON.stringify(offerObj.content),
+    };
+
+    const result = await Offers.findOneAndUpdate(
+      { 
+        gameID, 
+        'branches.branch': branch, 
+        'branches.offers.offerID': offerObj.offerId 
+      },
+      { 
+        $set: { 
+          'branches.$[branch].offers.$[offer]': offer 
+        } 
+      },
+      {
+        arrayFilters: [
+          { 'branch.branch': branch },
+          { 'offer.offerID': offerObj.offerId }
+        ],
+        new: true
+      }
+    ).exec();
+
+    res.status(200).json({ success: true, message: 'Offer created successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
+app.post('/api/getOffers', async (req, res) => {
+  const { gameID, branch } = req.body;
+
+  try {
+    const offers = await Offers.aggregate([
+        { $match: { gameID } }, 
+        { $unwind: "$branches" }, 
+        { $match: { "branches.branch": branch } }, 
+        { $unwind: "$branches.offers" }, 
+        { $replaceRoot: { newRoot: `$branches.offers` } }
+    ]);
+
+    res.status(200).json({ success: true, offers });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
+app.post('/api/removeOffer', async (req, res) => {
+  const { gameID, branch, offerID } = req.body;
+  try {
+
+    const result = await Offers.findOneAndUpdate(
+      { 
+        gameID, 
+        'branches.branch': branch 
+      },
+      { 
+        $pull: { 
+          'branches.$[branch].offers': { offerID: offerID } 
+        } 
+      },
+      {
+        arrayFilters: [
+          { 'branch.branch': branch }
+        ],
+        new: true
+      }
+    ).exec();
+
+    const locResult = await Localization.findOneAndUpdate(
+      { 
+        gameID, 
+        'branches.branch': branch 
+      },
+      { 
+        $pull: { 
+          'branches.$[branch].localization.offers': { 
+            $or: [
+              { sid: offerID + "|name" },
+              { sid: offerID + "|desc" }
+            ]
+          }
+        }
+      },
+      {
+        arrayFilters: [
+          { 'branch.branch': branch }
+        ],
+        new: true
+      }
+    ).exec();
+
+    res.status(200).json({ success: true, message: 'Offer created successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
+app.post('/api/getOffersNames', async (req, res) => {
+  const { gameID, branch } = req.body;
+
+  try {
+    const offers = await Offers.aggregate([
+        { $match: { gameID } }, 
+        { $unwind: "$branches" }, 
+        { $match: { "branches.branch": branch } }, 
+        { $unwind: "$branches.offers" }, 
+        { $replaceRoot: { newRoot: `$branches.offers` } },
+        { 
+          $project: {
+            _id: 0,
+            offerID: 1, 
+            offerName: 1 
+          }
+        }
+      ]);
+
+    res.status(200).json({ success: true, offers });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
+
 
 app.post('/api/getGameplayRelations', async (req, res) => {
   try {
