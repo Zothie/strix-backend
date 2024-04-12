@@ -37,6 +37,7 @@ const PlayerWarehouse = require('./models/playerWarehouseModel')
 const Relations = require('./models/relationsModel.js')
 const Localization = require('./models/localizationModel.js')
 const Offers = require('./models/offersModel.js')
+const CustomCharts = require('./models/charts.js')
 
 
 const segmentsLib = require('./segmentsLib.cjs')
@@ -671,6 +672,25 @@ app.post('/api/createGame', async (req, res) => {
       ],
     });
     await newOffers.save();
+
+    const newCustomCharts = new CustomCharts({
+      gameID: newGameID,
+      branches: [
+        {
+          branch: 'development',
+          dashboards: [],
+        },
+        {
+          branch: 'stage',
+          dashboards: [],
+        },
+        {
+          branch: 'production',
+          dashboards: [],
+        },
+      ],
+    });
+    await newCustomCharts.save();
 
 
     res.json({ success: true, gameID: newGameID });
@@ -2701,6 +2721,110 @@ app.post('/api/getEntitiesNames', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+app.post('/api/getEntityIcon', async (req, res) => {
+  try {
+    const { gameID, branch, nodeID } = req.body;
+
+    let entityIcon = await NodeModel.aggregate([
+      { $match: { gameID } }, 
+      { $unwind: "$branches" }, 
+      { $match: { "branches.branch": branch } }, 
+      { $unwind: "$branches.planningTypes" }, 
+      { $match: { "branches.planningTypes.type": "entity" } },
+      { $unwind: "$branches.planningTypes.nodes" },
+      { $match: { "branches.planningTypes.nodes.nodeID": nodeID } },
+
+      { $unset: ["branches.planningTypes.nodes.entityBasic.mainConfigs"] },
+      { $unset: ["branches.planningTypes.nodes.entityBasic.inheritedConfigs"] },
+      { $unset: ["branches.planningTypes.nodes.entityCategory.mainConfigs"] },
+      { $unset: ["branches.planningTypes.nodes.entityCategory.inheritedConfigs"] },
+
+      { $replaceRoot: { newRoot: "$branches.planningTypes.nodes" } },
+      { 
+        $project: {
+          _id: 0,
+          nodeID: 1,
+          entityBasic: 1,
+          entityCategory: 1,
+        }
+      }
+    ]);
+
+    entityIcon = entityIcon[0]
+    if (entityIcon.entityBasic) {
+      entityIcon = entityIcon.entityBasic.entityIcon
+    } else if (entityIcon.entityCategory) {
+      entityIcon = entityIcon.entityCategory.entityIcon
+    }
+
+
+    if (!entityIcon) {
+      return res.status(404).json({ message: 'Entity not found' });
+    }
+    res.status(200).json({ success: true, entityIcon });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
+async function fetchEntityIcons(gameID, branch, nodeIDs) {
+  let entityIcons = await NodeModel.aggregate([
+    { $match: { gameID } }, 
+    { $unwind: "$branches" }, 
+    { $match: { "branches.branch": branch } }, 
+    { $unwind: "$branches.planningTypes" }, 
+    { $match: { "branches.planningTypes.type": "entity" } },
+    { $unwind: "$branches.planningTypes.nodes" },
+    { $match: { "branches.planningTypes.nodes.nodeID": { $in: nodeIDs } } },
+
+    { $unset: ["branches.planningTypes.nodes.entityBasic.mainConfigs"] },
+    { $unset: ["branches.planningTypes.nodes.entityBasic.inheritedConfigs"] },
+    { $unset: ["branches.planningTypes.nodes.entityCategory.mainConfigs"] },
+    { $unset: ["branches.planningTypes.nodes.entityCategory.inheritedConfigs"] },
+
+    { $replaceRoot: { newRoot: "$branches.planningTypes.nodes" } },
+    { 
+      $project: {
+        _id: 0,
+        nodeID: 1,
+        entityBasic: 1,
+        entityCategory: 1,
+      }
+    }
+  ]);
+
+  entityIcons = entityIcons.map(entity => {
+    if (entity.entityBasic) {
+      return {
+        nodeID: entity.nodeID,
+        icon: entity.entityBasic.entityIcon
+      }
+    } else if (entity.entityCategory) {
+      return {
+        nodeID: entity.nodeID,
+        icon: entity.entityCategory.entityIcon
+      }
+    }
+  })
+  return entityIcons
+}
+app.post('/api/getEntityIcons', async (req, res) => {
+  try {
+    const { gameID, branch, nodeIDs } = req.body;
+
+    let entityIcons = await fetchEntityIcons(gameID, branch, nodeIDs)
+
+    if (!entityIcons) {
+      return res.status(404).json({ message: 'Entity not found' });
+    }
+    res.status(200).json({ success: true, entityIcons });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+
 
 app.post('/api/saveEntityBasicInfo', async (req, res) => {
 
@@ -3142,7 +3266,7 @@ app.post('/api/createNewOffer', async (req, res) => {
         moneyCurr: offerObj.price.moneyCurr,
       },
 
-      content: JSON.stringify(offerObj.content),
+      content: offerObj.content,
     };
     const result = await Offers.findOneAndUpdate(
       { gameID },
@@ -3207,7 +3331,7 @@ app.post('/api/updateOffer', async (req, res) => {
         moneyCurr: offerObj.price.moneyCurr,
       },
 
-      content: JSON.stringify(offerObj.content),
+      content: offerObj.content,
     };
 
     const result = await Offers.findOneAndUpdate(
@@ -3330,7 +3454,34 @@ app.post('/api/getOffersNames', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 })
+app.post('/api/getOffersByContentNodeID', async (req, res) => {
+  const { gameID, branch, nodeID } = req.body;
 
+  try {
+    const offers = await Offers.aggregate([
+        { $match: { gameID } }, 
+        { $unwind: "$branches" }, 
+        { $match: { "branches.branch": branch } }, 
+        { $unwind: "$branches.offers" }, 
+        { $match: { "branches.offers.content": { $elemMatch: { nodeID: nodeID } } } },
+        { $replaceRoot: { newRoot: `$branches.offers` } },
+        { 
+          $project: {
+            _id: 0,
+            offerID: 1,
+            offerName: 1,
+            offerIcon: 1,
+            content: 1,
+          }
+        }
+      ]);
+
+    res.status(200).json({ success: true, offers });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
 
 app.post('/api/getGameplayRelations', async (req, res) => {
   try {
@@ -3899,23 +4050,22 @@ app.post('/api/updateAnalyticsEvent', async (req, res) => {
       return res.status(400).json({ message: 'Missing required parameters' });
     }
 
-    // Удаление нежелательных полей '_id' из массива 'values'
-    if (eventObject.values && Array.isArray(eventObject.values)) {
-      eventObject.values.forEach(value => {
-        delete value._id;
-      });
-    }
+    let tempObj = eventObject;
+    tempObj.values = tempObj.values.map(value => {
+      value._id = new mongoose.Types.ObjectId().toString();
+      return value;
+    });
 
     // Найти и обновить ивент в коллекции AnalyticsEvents
     const updatedAnalyticsEvent = await AnalyticsEvents.findOneAndUpdate(
       { 'gameID': gameID, 'branches.branch': branchName, 'branches.events.eventID': eventID },
       {
         $set: {
-          'branches.$[b].events.$[e].eventName': eventObject.eventName,
-          'branches.$[b].events.$[e].eventCodeName': eventObject.eventCodeName,
-          'branches.$[b].events.$[e].values': eventObject.values,
-          'branches.$[b].events.$[e].comment': eventObject.comment,
-          'branches.$[b].events.$[e].tags': eventObject.tags,
+          'branches.$[b].events.$[e].eventName': tempObj.eventName,
+          'branches.$[b].events.$[e].eventCodeName': tempObj.eventCodeName,
+          'branches.$[b].events.$[e].values': tempObj.values,
+          'branches.$[b].events.$[e].comment': tempObj.comment,
+          'branches.$[b].events.$[e].tags': tempObj.tags,
         },
       },
       {
@@ -6556,10 +6706,117 @@ app.post('/api/analytics/getDAU', async (req, res) => {
   }
 
 });
-const randomNumberInRange = (min, max) => {
-        return Math.floor(Math.random()
-            * (max - min + 1)) + min;
+const randomNumberInRange = (min, max, isFloat) => {
+  if (isFloat) {
+    return Math.random()
+        * (max - min + 1) + min;
+  } else {
+    return Math.floor(Math.random()
+        * (max - min + 1)) + min;
+  }
 };
+
+// Generate random data for testing.
+// Trend is int between -1 and 1 (everyday change)
+// Deviation is any int. Dev. 0.5 means that every day will be +/- 0.5 of trend
+async function generateRandomDataByDays(
+  startDate, 
+  endDate, 
+  minValue, 
+  maxValue,
+  trend, 
+  deviation, 
+  toFixedAmount = 2, 
+  categoryFieldName = 'timestamp', 
+  valueFieldName = 'value'
+  ) {
+  let currentDate = new Date(startDate);
+  let lastGeneratedValue = randomNumberInRange(minValue, maxValue);
+
+  let randomData = [];
+  while (currentDate <= endDate) {
+    let calcRandAdditiveTrend = trend - randomNumberInRange(-deviation, deviation)
+    let randomValue = lastGeneratedValue + (lastGeneratedValue * calcRandAdditiveTrend)
+
+
+    randomValue = parseFloat(randomValue.toFixed(toFixedAmount));
+
+    randomData.push({
+      [categoryFieldName]: currentDate.toISOString(),
+      [valueFieldName]: randomValue
+    });
+
+    lastGeneratedValue = randomValue;
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return randomData;
+}
+async function generateRandomDataByDaysAndGroups(
+  startDate, 
+  endDate, 
+  minValue, 
+  maxValue,
+  trend, 
+  deviation, 
+  toFixedAmount = 2, 
+  categoryFieldName = 'timestamp', 
+  categoriesArray = [],
+  valueFieldName = 'value'
+  ) {
+  let currentDate = new Date(startDate);
+  let lastGeneratedValue = randomNumberInRange(minValue, maxValue);
+
+  let randomData = [];
+  while (currentDate <= endDate) {
+    let calcRandAdditiveTrend = trend - randomNumberInRange(-deviation, deviation)
+    let randomValue = lastGeneratedValue + (lastGeneratedValue * calcRandAdditiveTrend)
+
+
+    randomValue = parseFloat(randomValue.toFixed(toFixedAmount));
+
+    randomData.push({
+      [categoryFieldName]: currentDate.toISOString(),
+      [valueFieldName]: randomValue
+    });
+
+    lastGeneratedValue = randomValue;
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return randomData;
+}
+async function generateRandomDataByNumber(startNum, endNum, minValue, maxValue, trend, deviation, toFixedAmount, categoryFieldName, valueFieldName) {
+  let currentNum = startNum;
+  let lastGeneratedValue = randomNumberInRange(minValue, maxValue);
+
+  let randomData = [];
+  while (currentNum <= endNum) {
+    let calcRandAdditiveTrend = trend - randomNumberInRange(-deviation, deviation)
+    let randomValue = lastGeneratedValue + (lastGeneratedValue * calcRandAdditiveTrend)
+
+
+    randomValue = parseFloat(randomValue.toFixed(toFixedAmount));
+
+    randomData.push({
+      [categoryFieldName]: currentNum,
+      [valueFieldName]: randomValue
+    });
+
+    lastGeneratedValue = randomValue;
+    
+    currentNum += 1;
+  }
+
+  return randomData;
+}
+function arraySum(numbers) {
+  return numbers.reduce((accumulator, currentValue) => {
+    return accumulator + currentValue;
+  }, 0);
+} 
 app.post('/api/analytics/getRevenue', async (req, res) => {
   const {gameID, branchName, filterDate, filterSegments} = req.body
 
@@ -6596,156 +6853,304 @@ app.post('/api/analytics/getRevenue', async (req, res) => {
     // const response = await druidLib.getRevenue(gameID, branchName, startDate, endDate, dateDiff, clientIDs)
 
     // const deltaValue = calculateDelta(deltaResponse, response)
+    let generatedData = await generateRandomDataByDays(startDate, endDate, 80, 400, 0.1, 0.05)
+    let responseData = generatedData.map(item => ({
+      timestamp: item.timestamp,
+      sales: parseFloat((item.value*2 * randomNumberInRange(1.2, 2))).toFixed(0),
+      revenue: item.value*2,
+    }))
+    deltaValue = arraySum(responseData.map(item => item.revenue)).toFixed(2)
 
-    let responseData = [
-      {
-        timestamp: '2023-12-19T10:00:00.000Z',
-        value: randomNumberInRange(1, 500)
-      },
-      {
-        timestamp: '2023-12-20T10:00:00.000Z',
-        value: randomNumberInRange(1, 500)
-      },
-      {
-        timestamp: '2023-12-21T10:00:00.000Z',
-        value: randomNumberInRange(1, 500)
-      },
-      {
-        timestamp: '2023-12-22T10:00:00.000Z',
-        value: randomNumberInRange(1, 500)
-      },
-      {
-        timestamp: '2023-12-23T10:00:00.000Z',
-        value: randomNumberInRange(1, 500)
-      },
-      {
-        timestamp: '2023-12-24T10:00:00.000Z',
-        value: randomNumberInRange(1, 500)
-      },
-      {
-        timestamp: '2023-12-25T10:00:00.000Z',
-        value: randomNumberInRange(1, 500)
-      },
-      {
-        timestamp: '2023-12-26T10:00:00.000Z',
-        value: randomNumberInRange(1, 500)
-      },
-    ]
+    if (true) {
+      res.status(200).json({success: true, message: {data: responseData, granularity: 'day', deltaValue: deltaValue}})
+    } else{
+      res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+    }
 
-    const randVariant = randomNumberInRange(1, 3)
-    switch (randVariant) {
-      case 1:
-        responseData = [
-          {
-            timestamp: '2023-12-19T10:00:00.000Z',
-            value: randomNumberInRange(-10, -100)
-          },
-          {
-            timestamp: '2023-12-20T10:00:00.000Z',
-            value: randomNumberInRange(-10, -100)
-          },
-          {
-            timestamp: '2023-12-21T10:00:00.000Z',
-            value: randomNumberInRange(-10, -100)
-          },
-          {
-            timestamp: '2023-12-22T10:00:00.000Z',
-            value: randomNumberInRange(-10, -100)
-          },
-          {
-            timestamp: '2023-12-23T10:00:00.000Z',
-            value: randomNumberInRange(-10, -100)
-          },
-          {
-            timestamp: '2023-12-24T10:00:00.000Z',
-            value: randomNumberInRange(-10, -100)
-          },
-          {
-            timestamp: '2023-12-25T10:00:00.000Z',
-            value: randomNumberInRange(-10, -100)
-          },
-          {
-            timestamp: '2023-12-26T10:00:00.000Z',
-            value: randomNumberInRange(-10, -100)
-          },
-        ]
-        break;
-      case 2:
-        responseData = [
-          {
-            timestamp: '2023-12-19T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-20T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-21T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-22T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-23T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-24T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-25T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-26T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-        ]
-        break;
-      case 3:
-        responseData = [
-          {
-            timestamp: '2023-12-19T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-20T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-21T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-22T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-23T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-24T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-25T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-          {
-            timestamp: '2023-12-26T10:00:00.000Z',
-            value: randomNumberInRange(1, 500)
-          },
-        ]
-        break;
+  } catch (error) {
+    console.log(error)
+    res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+
+
+});
+app.post('/api/analytics/getRandomDataForUniversalChart', async (req, res) => {
+  const {gameID, branchName, filterDate, filterSegments, categoryField} = req.body
+
+  try {
+
+    const engineVersions = ['ue4.27', 'ue5.23', 'unity2019.4', 'unity2020.3', 'unity2021.1']
+    const gameVersions = ['2.23.1', '2.23.2', '2.24.0', '2.25.0', '2.26.0', '2.27.0', '2.28.0']
+    const platforms = ['windows_11', 'windows_10', 'macos', 'linux', 'android', 'ios']
+    const languages = ['English', 'German', 'French', 'Spanish', 'Russian', 'Chinese', 'Japanese', 'Korean']
+    const countries = ['US', 'UK', 'Germany', 'France', 'Spain', 'Russia', 'China', 'Japan', 'Korea']
+
+    let categoryArray = []
+    switch (categoryField) {
+      case 'engineVersion': {
+        categoryArray = engineVersions
+        break
+      }
+      case 'gameVersion': {
+        categoryArray = gameVersions
+        break
+      }
+      case 'platform': {
+        categoryArray = platforms
+        break
+      }
+      case 'language': {
+        categoryArray = languages
+        break
+      }
+      case 'country': {
+        categoryArray = countries
+        break
+      }
+    }
+
+    const endDate = new Date(filterDate[1])
+    const startDate = new Date(filterDate[0])
+    startDate.setUTCHours(0, 0, 0, 0);
+    endDate.setUTCHours(23, 59, 59, 999);
+
+    const dateDiff = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24));
+
+    switch (categoryField) {
+      case 'timestamp': {
+        let generatedData = await generateRandomDataByDays(startDate, endDate, 80, 400, 0.1, 0.05)
+        let responseData = generatedData
+        deltaValue = arraySum(responseData.map(item => item.value)).toFixed(2)
+        res.status(200).json({success: true, message: {data: responseData, granularity: 'day', deltaValue: deltaValue}})
+        return
+      }
+      default: {
+        let generatedData = []
+
+        let values
+        for (i = 0; i <= dateDiff-1; i++) {
+          values = categoryArray.map(item => {
+            return {
+                [categoryField]: item,
+                value: randomNumberInRange(80, 1000)
+                }
+          })
+        }
+        generatedData = values
+
+        let responseData = generatedData
+        deltaValue = arraySum(responseData.map(item => item.value)).toFixed(2)
+        res.status(200).json({success: true, message: {data: responseData}})
+        return
+      }
+    }
+
+  } catch (error) {
+    console.log(error)
+    res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+
+
+});
+app.post('/api/analytics/getAvgCustomerProfile', async (req, res) => {
+  const {gameID, branchName, filterDate, filterSegments} = req.body
+
+  try {
+
+    const endDate = new Date(filterDate[1])
+    const startDate = new Date(filterDate[0])
+
+    startDate.setUTCHours(0, 0, 0, 0);
+    endDate.setUTCHours(23, 59, 59, 999);
+
+    // Get difference between dates in milliseconds
+    const dateDiff = (endDate - startDate) / (1000 * 60 * 60 * 24);
+
+    // Getting date for delta response, so if we get a query for "today" data, we get it and delta between today and yesterday.
+    // If we get a data for this month, we will get delta for the previous month.
+    const deltaEndDate = new Date(startDate)
+    deltaEndDate.setDate(startDate.getDate() - 1)
+
+    const deltaStartDate = new Date(startDate)
+    deltaStartDate.setDate(startDate.getDate() - (dateDiff + 1))
+
+    deltaStartDate.setUTCHours(0, 0, 0, 0);
+    deltaEndDate.setUTCHours(23, 59, 59, 999);
+
+    const deltaDateDiff = (deltaEndDate - deltaStartDate) / (1000 * 60 * 60 * 24);
+
+    let clientIDs = []
+
+    if (filterSegments && filterSegments.length !== 0) {
+      clientIDs = await getPlayersFromSegment(gameID, branchName, filterSegments)
+    }
+    // const deltaResponse = await druidLib.getRevenue(gameID, branchName, deltaStartDate, deltaEndDate, deltaDateDiff, clientIDs)
+    // const response = await druidLib.getRevenue(gameID, branchName, startDate, endDate, dateDiff, clientIDs)
+
+    // const deltaValue = calculateDelta(deltaResponse, response)
+    let generatedData_ARPPU = await generateRandomDataByDays(startDate, endDate, 0.3, 0.6, 0.1, 0.05)
+    let generatedData_Recency = await generateRandomDataByDays(startDate, endDate, 1, 2, 0.1, 0.05)
+    let generatedData_SalesPerLife = await generateRandomDataByDays(startDate, endDate, 2, 4, 0.01, 0.05)
+
+    const avgProfile = {
+      arppu: generatedData_ARPPU,
+      arecppu: generatedData_Recency,
+      asppu: generatedData_SalesPerLife,
+      totalSales: 1000,
+      avgProfile: [
+        {
+          name: 'Game Level',
+          value: '4',
+          templateID: '1',
+          players: 321,
+          subProfiles: [
+            {
+              value: '3',
+              players: 120,
+            },
+            {
+              value: '2',
+              players: 56,
+            },
+            {
+              value: '1',
+              players: 21,
+            },
+          ]
+        },
+        {
+          name: 'Fav. Char',
+          value: 'Leon',
+          templateID: '2',
+          players: 632,
+          subProfiles: [
+            {
+              value: 'Shelly',
+              players: 120,
+            },
+            {
+              value: 'Bull',
+              players: 56,
+            },
+            {
+              value: 'Crow',
+              players: 21,
+            },
+          ]
+        },
+        {
+          name: 'Winrate',
+          value: '64%',
+          templateID: '3',
+          players: 345,
+          subProfiles: [
+            {
+              value: '63%',
+              players: 341,
+            },
+            {
+              value: '62%',
+              players: 334,
+            },
+            {
+              value: '61%',
+              players: 234,
+            },
+          ]
+        },
+        {
+          name: 'Retention',
+          value: 'D0',
+          templateID: '4',
+          players: 1231,
+          subProfiles: [
+            {
+              value: 'D3',
+              players: 120,
+            },
+            {
+              value: 'D2',
+              players: 56,
+            },
+            {
+              value: 'D1',
+              players: 21,
+            },
+          ]
+        },
+        {
+          name: 'Country',
+          value: 'USA',
+          templateID: '5',
+          players: 1231,
+          subProfiles: [
+            {
+              value: 'France',
+              players: 564,
+            },
+            {
+              value: 'Canada',
+              players: 341,
+            },
+            {
+              value: 'Germany',
+              players: 234,
+            },
+          ]
+        },
+        {
+          name: 'Total Summ Spent',
+          value: '$34',
+          templateID: '6',
+          players: 561,
+          subProfiles: [
+            {
+              value: '$54',
+              players: 120,
+            },
+            {
+              value: '$45',
+              players: 56,
+            },
+            {
+              value: '$76',
+              players: 21,
+            },
+          ]
+        },
+        {
+          name: 'IAP bought times',
+          value: '1',
+          templateID: '7',
+          players: 456,
+          subProfiles: [
+            {
+              value: '2',
+              players: 120,
+            },
+            {
+              value: '3',
+              players: 56,
+            },
+            {
+              value: '4',
+              players: 21,
+            },
+          ]
+        },
+        {
+          name: 'Segment',
+          value: 'New player',
+          templateID: '8',
+          players: 2312,
+          subProfiles: [
+          ]
+        },
+      ],
     }
 
     if (true) {
-      res.status(200).json({success: true, message: {data: responseData, granularity: 'day', deltaValue: randVariant === 1 ? randomNumberInRange(-500, -1000) : randomNumberInRange(500, 1000)}})
+      res.status(200).json({success: true, message: {data: avgProfile, granularity: 'day'}})
     } else{
       res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
     }
@@ -7102,6 +7507,564 @@ app.post('/api/analytics/getSessionLength', async (req, res) => {
   }
 
 
+});
+app.post('/api/analytics/getEconomyBalanceForCurrency', async (req, res) => {
+  const {gameID, branchName, filterDate, filterSegments} = req.body
+
+  try {
+
+    const endDate = new Date(filterDate[1])
+    const startDate = new Date(filterDate[0])
+
+    startDate.setUTCHours(0, 0, 0, 0);
+    endDate.setUTCHours(23, 59, 59, 999);
+
+    // Get difference between dates in milliseconds
+    const dateDiff = (endDate - startDate) / (1000 * 60 * 60 * 24);
+
+    // Getting date for delta response, so if we get a query for "today" data, we get it and delta between today and yesterday.
+    // If we get a data for this month, we will get delta for the previous month.
+    const deltaEndDate = new Date(startDate)
+    deltaEndDate.setDate(startDate.getDate() - 1)
+
+    const deltaStartDate = new Date(startDate)
+    deltaStartDate.setDate(startDate.getDate() - (dateDiff + 1))
+
+    deltaStartDate.setUTCHours(0, 0, 0, 0);
+    deltaEndDate.setUTCHours(23, 59, 59, 999);
+
+    const deltaDateDiff = (deltaEndDate - deltaStartDate) / (1000 * 60 * 60 * 24);
+
+    let clientIDs = []
+
+    if (filterSegments && filterSegments.length !== 0) {
+      clientIDs = await getPlayersFromSegment(gameID, branchName, filterSegments)
+    }
+    // const deltaResponse = await druidLib.getRevenue(gameID, branchName, deltaStartDate, deltaEndDate, deltaDateDiff, clientIDs)
+    // const response = await druidLib.getRevenue(gameID, branchName, startDate, endDate, dateDiff, clientIDs)
+
+    // const deltaValue = calculateDelta(deltaResponse, response)
+    let generatedData = await generateRandomDataByDays(startDate, endDate, 80, 400, 0.1, 0.05, 0, 'timestamp', 'earn')
+    let responseData = generatedData.map(i => 
+      {
+        return {
+          timestamp: i.timestamp
+        }
+      }
+    )
+    responseData = responseData.map((item, index) => {
+      return {
+        timestamp: item.timestamp,
+        currencies: [
+          {
+            currencyNodeID: 'd366e616-8012-4290-aea8-b13cf6a0be90',
+            absolute: {
+              sources: [
+                {
+                  id: 'iapBought',
+                  value: randomNumberInRange(1000, 10000),
+                },
+                {
+                  id: 'levelSuccess',
+                  value: randomNumberInRange(1000, 10000),
+                },
+                {
+                  id: 'itemSold',
+                  value: randomNumberInRange(100000, 150000),
+                },
+              ],
+              sinks: [
+                {
+                  id: 'itemBought',
+                  value: randomNumberInRange(-80000, -50000),
+                }
+              ]
+            },
+            perPlayer: {
+              sources: [
+                {
+                  id: 'levelSuccess',
+                  value: randomNumberInRange(1000, 2000),
+                },
+                {
+                  id: 'itemSold',
+                  value: randomNumberInRange(1000, 5000),
+                },
+              ],
+              sinks: [
+                {
+                  id: 'itemBought',
+                  value: randomNumberInRange(-8000, -2000),
+                }
+              ]
+            }
+          },
+          {
+            currencyNodeID: '99bd2cf7-110e-4a14-b7a3-aa597e84d534',
+            absolute: {
+              sources: [
+                {
+                  id: 'iapBought',
+                  value: randomNumberInRange(100, 1000),
+                },
+                {
+                  id: 'levelSuccess',
+                  value: randomNumberInRange(100, 1000),
+                },
+                {
+                  id: 'itemSold',
+                  value: randomNumberInRange(10000, 15000),
+                },
+              ],
+              sinks: [
+                {
+                  id: 'itemBought',
+                  value: randomNumberInRange(-8000, -5000),
+                }
+              ]
+            },
+            perPlayer: {
+              sources: [
+                {
+                  id: 'levelSuccess',
+                  value: randomNumberInRange(100, 200),
+                },
+                {
+                  id: 'itemSold',
+                  value: randomNumberInRange(100, 500),
+                },
+              ],
+              sinks: [
+                {
+                  id: 'itemBought',
+                  value: randomNumberInRange(-800, -200),
+                }
+              ]
+            }
+          },
+        ],
+      }
+    })
+    
+
+
+    if (true) {
+      res.status(200).json({success: true, message: {data: responseData, granularity: 'day' }})
+    } else{
+      res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+    }
+
+  } catch (error) {
+    console.log(error)
+    res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+
+
+});
+app.post('/api/analytics/getPaymentDriversOffers', async (req, res) => {
+  const {gameID, branchName, filterDate, filterSegments} = req.body
+
+  try {
+
+    let offers = await Offers.aggregate([
+      { $match: { gameID } }, 
+      { $unwind: "$branches" }, 
+      { $match: { "branches.branch": branchName } }, 
+      { $unwind: "$branches.offers" }, 
+      { $replaceRoot: { newRoot: `$branches.offers` } },
+      { $project: { _id: 0, offerName: 1, offerIcon: 1, offerPrice: 1, content: 1 } }
+    ]);
+
+    let driverOffers = offers.filter(offer => offer.offerPrice.targetCurrency === 'entity')
+    let driverOffersPriceEntities = driverOffers.map(offer => offer.offerPrice.nodeID)
+    let currencyOffers = offers.filter(offer => offer.content.some(content => driverOffersPriceEntities.includes(content.nodeID)))
+    
+    let responseData = driverOffers.map(offer => ({driver: offer}))
+    responseData = responseData.map((item, index) => {
+      return {
+        ...item,
+        chainedPayments: randomNumberInRange(100, 10000),
+        currencyOffer: currencyOffers.find(offer => offer.content.some(content => content.nodeID === item.driver.offerPrice.nodeID))
+      }
+    })
+
+
+    if (true) {
+      res.status(200).json({success: true, message: {data: responseData, granularity: 'day' }})
+    } else{
+      res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+    }
+
+  } catch (error) {
+    console.log(error)
+    res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+});
+app.post('/api/analytics/getSourcesAndSinks', async (req, res) => {
+
+  const {gameID, branchName, filterDate, filterSegments} = req.body
+
+  try {
+
+    const sources = ['missionReward', 'questReward', 'eventReward', 'inAppPurchase']
+    const sinks = ['itemBought', 'itemUpgraded', 'characterUpgraded', 'secondLifeBought']
+
+    const nodes = ['d366e616-8012-4290-aea8-b13cf6a0be90', '99bd2cf7-110e-4a14-b7a3-aa597e84d534']
+
+    function getRandomNodeID() {
+      return nodes[randomNumberInRange(0, nodes.length - 1)]
+    }
+
+    let icons = await fetchEntityIcons(gameID, branchName, nodes)
+
+    let responseData = {
+      sources: 
+        sources.map(source => (
+          {
+            name: source,
+            mean: randomNumberInRange(100, 1000),
+            total: randomNumberInRange(100, 10000),
+            players: randomNumberInRange(1000, 7000),
+            currencyEntity: getRandomNodeID(),
+            avgProfile: [
+              {
+                name: 'Game Level',
+                value: '4',
+                templateID: '1',
+                players: 321,
+                subProfiles: [
+                  {
+                    value: '3',
+                    players: 120,
+                  },
+                  {
+                    value: '2',
+                    players: 56,
+                  },
+                  {
+                    value: '1',
+                    players: 21,
+                  },
+                ]
+              },
+              {
+                name: 'Fav. Char',
+                value: 'Leon',
+                templateID: '2',
+                players: 632,
+                subProfiles: [
+                  {
+                    value: 'Shelly',
+                    players: 120,
+                  },
+                  {
+                    value: 'Bull',
+                    players: 56,
+                  },
+                  {
+                    value: 'Crow',
+                    players: 21,
+                  },
+                ]
+              },
+              {
+                name: 'Winrate',
+                value: '64%',
+                templateID: '3',
+                players: 345,
+                subProfiles: [
+                  {
+                    value: '63%',
+                    players: 341,
+                  },
+                  {
+                    value: '62%',
+                    players: 334,
+                  },
+                  {
+                    value: '61%',
+                    players: 234,
+                  },
+                ]
+              },
+              {
+                name: 'Retention',
+                value: 'D0',
+                templateID: '4',
+                players: 1231,
+                subProfiles: [
+                  {
+                    value: 'D3',
+                    players: 120,
+                  },
+                  {
+                    value: 'D2',
+                    players: 56,
+                  },
+                  {
+                    value: 'D1',
+                    players: 21,
+                  },
+                ]
+              },
+              {
+                name: 'Country',
+                value: 'USA',
+                templateID: '5',
+                players: 1231,
+                subProfiles: [
+                  {
+                    value: 'France',
+                    players: 564,
+                  },
+                  {
+                    value: 'Canada',
+                    players: 341,
+                  },
+                  {
+                    value: 'Germany',
+                    players: 234,
+                  },
+                ]
+              },
+              {
+                name: 'Total Summ Spent',
+                value: '$34',
+                templateID: '6',
+                players: 561,
+                subProfiles: [
+                  {
+                    value: '$54',
+                    players: 120,
+                  },
+                  {
+                    value: '$45',
+                    players: 56,
+                  },
+                  {
+                    value: '$76',
+                    players: 21,
+                  },
+                ]
+              },
+              {
+                name: 'IAP bought times',
+                value: '1',
+                templateID: '7',
+                players: 456,
+                subProfiles: [
+                  {
+                    value: '2',
+                    players: 120,
+                  },
+                  {
+                    value: '3',
+                    players: 56,
+                  },
+                  {
+                    value: '4',
+                    players: 21,
+                  },
+                ]
+              },
+              {
+                name: 'Segment',
+                value: 'New player',
+                templateID: '8',
+                players: 2312,
+                subProfiles: [
+                ]
+              },
+            ],
+          }
+        ))
+      ,
+      sinks: 
+        sinks.map(sinks => (
+          {
+            name: sinks,
+            mean: randomNumberInRange(100, 1000),
+            total: randomNumberInRange(100, 10000),
+            players: randomNumberInRange(1000, 7000),
+            currencyEntity: getRandomNodeID(),
+            avgProfile: [
+              {
+                name: 'Game Level',
+                value: '4',
+                templateID: '1',
+                players: 321,
+                subProfiles: [
+                  {
+                    value: '3',
+                    players: 120,
+                  },
+                  {
+                    value: '2',
+                    players: 56,
+                  },
+                  {
+                    value: '1',
+                    players: 21,
+                  },
+                ]
+              },
+              {
+                name: 'Fav. Char',
+                value: 'Leon',
+                templateID: '2',
+                players: 632,
+                subProfiles: [
+                  {
+                    value: 'Shelly',
+                    players: 120,
+                  },
+                  {
+                    value: 'Bull',
+                    players: 56,
+                  },
+                  {
+                    value: 'Crow',
+                    players: 21,
+                  },
+                ]
+              },
+              {
+                name: 'Winrate',
+                value: '64%',
+                templateID: '3',
+                players: 345,
+                subProfiles: [
+                  {
+                    value: '63%',
+                    players: 341,
+                  },
+                  {
+                    value: '62%',
+                    players: 334,
+                  },
+                  {
+                    value: '61%',
+                    players: 234,
+                  },
+                ]
+              },
+              {
+                name: 'Retention',
+                value: 'D0',
+                templateID: '4',
+                players: 1231,
+                subProfiles: [
+                  {
+                    value: 'D3',
+                    players: 120,
+                  },
+                  {
+                    value: 'D2',
+                    players: 56,
+                  },
+                  {
+                    value: 'D1',
+                    players: 21,
+                  },
+                ]
+              },
+              {
+                name: 'Country',
+                value: 'USA',
+                templateID: '5',
+                players: 1231,
+                subProfiles: [
+                  {
+                    value: 'France',
+                    players: 564,
+                  },
+                  {
+                    value: 'Canada',
+                    players: 341,
+                  },
+                  {
+                    value: 'Germany',
+                    players: 234,
+                  },
+                ]
+              },
+              {
+                name: 'Total Summ Spent',
+                value: '$34',
+                templateID: '6',
+                players: 561,
+                subProfiles: [
+                  {
+                    value: '$54',
+                    players: 120,
+                  },
+                  {
+                    value: '$45',
+                    players: 56,
+                  },
+                  {
+                    value: '$76',
+                    players: 21,
+                  },
+                ]
+              },
+              {
+                name: 'IAP bought times',
+                value: '1',
+                templateID: '7',
+                players: 456,
+                subProfiles: [
+                  {
+                    value: '2',
+                    players: 120,
+                  },
+                  {
+                    value: '3',
+                    players: 56,
+                  },
+                  {
+                    value: '4',
+                    players: 21,
+                  },
+                ]
+              },
+              {
+                name: 'Segment',
+                value: 'New player',
+                templateID: '8',
+                players: 2312,
+                subProfiles: [
+                ]
+              },
+            ],
+          }
+        ))
+      ,
+    }
+
+    responseData = {
+      sources: 
+        responseData.sources.map(source => ({
+          ...source,
+          entityIcon: icons.find(n => n.nodeID === source.currencyEntity).icon,
+        })),
+      sinks: 
+        responseData.sinks.map(sink => ({
+          ...sink,
+          entityIcon: icons.find(n => n.nodeID === sink.currencyEntity).icon,
+        })),
+    }
+
+    if (true) {
+      res.status(200).json({success: true, data: responseData})
+    } else{
+      res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+    }
+
+  } catch (error) {
+    console.log(error)
+    res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+  }
 });
 //
 // Analytics Dashboard - User Acquisition
@@ -8192,6 +9155,402 @@ app.post('/api/analytics/getAdsImpressionsDetailed', async (req, res) => {
 
 
 });
+app.post('/api/analytics/getOffersDataTableWithProfile', async (req, res) => {
+  const { gameID, branch, filterDate, filterSegments, priceType } = req.body;
+
+  try {
+    let offers = await Offers.aggregate([
+        { $match: { gameID } }, 
+        { $unwind: "$branches" }, 
+        { $match: { "branches.branch": branch } }, 
+        { $unwind: "$branches.offers" }, 
+        { $replaceRoot: { newRoot: `$branches.offers` } },
+        { $project: { _id: 0, offerName: 1, offerIcon: 1, offerPrice: 1 } }
+    ]);
+
+    offers = offers.filter(offer => offer.offerPrice.targetCurrency === priceType)
+
+    offers = offers.map(offer => {
+      let temp = {
+        ...offer,
+        sales: priceType === 'entity' ? randomNumberInRange(1000, 10000)*130 : randomNumberInRange(1000, 10000),
+        revenue: priceType === 'entity' ? randomNumberInRange(1000, 10000)*600 : randomNumberInRange(2000, 10000),
+        avgProfile: [
+          {
+            name: 'Game Level',
+            value: '4',
+            templateID: '1',
+            players: 321,
+            subProfiles: [
+              {
+                value: '3',
+                players: 120,
+              },
+              {
+                value: '2',
+                players: 56,
+              },
+              {
+                value: '1',
+                players: 21,
+              },
+            ]
+          },
+          {
+            name: 'Fav. Char',
+            value: 'Leon',
+            templateID: '2',
+            players: 632,
+            subProfiles: [
+              {
+                value: 'Shelly',
+                players: 120,
+              },
+              {
+                value: 'Bull',
+                players: 56,
+              },
+              {
+                value: 'Crow',
+                players: 21,
+              },
+            ]
+          },
+          {
+            name: 'Winrate',
+            value: '64%',
+            templateID: '3',
+            players: 345,
+            subProfiles: [
+              {
+                value: '63%',
+                players: 341,
+              },
+              {
+                value: '62%',
+                players: 334,
+              },
+              {
+                value: '61%',
+                players: 234,
+              },
+            ]
+          },
+          {
+            name: 'Retention',
+            value: 'D0',
+            templateID: '4',
+            players: 1231,
+            subProfiles: [
+              {
+                value: 'D3',
+                players: 120,
+              },
+              {
+                value: 'D2',
+                players: 56,
+              },
+              {
+                value: 'D1',
+                players: 21,
+              },
+            ]
+          },
+          {
+            name: 'Country',
+            value: 'USA',
+            templateID: '5',
+            players: 1231,
+            subProfiles: [
+              {
+                value: 'France',
+                players: 564,
+              },
+              {
+                value: 'Canada',
+                players: 341,
+              },
+              {
+                value: 'Germany',
+                players: 234,
+              },
+            ]
+          },
+          {
+            name: 'Total Summ Spent',
+            value: '$34',
+            templateID: '6',
+            players: 561,
+            subProfiles: [
+              {
+                value: '$54',
+                players: 120,
+              },
+              {
+                value: '$45',
+                players: 56,
+              },
+              {
+                value: '$76',
+                players: 21,
+              },
+            ]
+          },
+          {
+            name: 'IAP bought times',
+            value: '1',
+            templateID: '7',
+            players: 456,
+            subProfiles: [
+              {
+                value: '2',
+                players: 120,
+              },
+              {
+                value: '3',
+                players: 56,
+              },
+              {
+                value: '4',
+                players: 21,
+              },
+            ]
+          },
+          {
+            name: 'Segment',
+            value: 'New player',
+            templateID: '8',
+            players: 2312,
+            subProfiles: [
+            ]
+          },
+        ],
+      }
+      if (priceType === 'entity') {
+        temp.entityNodeID = offer.offerPrice.nodeID
+      }
+      return temp
+    })
+
+    res.status(200).json({ success: true, offers });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+app.post('/api/analytics/getFirstPaymentConversionTime', async (req, res) => {
+  const { gameID, branch, filterDate, filterSegments } = req.body;
+
+  try {
+
+    let randDays = randomNumberInRange(11, 23);
+    let responseData = await generateRandomDataByNumber(0, randDays, 4000, 10000, -0.5, 0, 0, 'day', 'players')
+
+    let randDeviation = randomNumberInRange(3,5)
+    responseData[randDeviation] = {
+      day: responseData[randDeviation].day,
+      players: responseData[randDeviation].players * randomNumberInRange(1.2, 2)
+    }
+
+    res.status(200).json({ success: true, message: {data: responseData, granularity: 'day'} });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+app.post('/api/analytics/getPaymentConversion', async (req, res) => {
+  const { gameID, branch, filterDate, filterSegments } = req.body;
+
+  try {
+
+    let randPayments = randomNumberInRange(1, 23);
+    let responseData = await generateRandomDataByNumber(1, randPayments, 4000, 10000, -0.5, 0, 0, 'payment', 'players')
+    responseData = responseData.map(item => ({
+      ...item,
+      meanPayment: randomNumberInRange(1, 15, true),
+      meanDaysToConvert: randomNumberInRange(1, 5),
+      revenue: randomNumberInRange(1000, 10000),
+      sales: randomNumberInRange(1000, 10000),
+      avgProfile: [
+      {
+        name: 'Game Level',
+        value: '4',
+        templateID: '1',
+        players: 321,
+        subProfiles: [
+          {
+            value: '3',
+            players: 120,
+          },
+          {
+            value: '2',
+            players: 56,
+          },
+          {
+            value: '1',
+            players: 21,
+          },
+        ]
+      },
+      {
+        name: 'Fav. Char',
+        value: 'Leon',
+        templateID: '2',
+        players: 632,
+        subProfiles: [
+          {
+            value: 'Shelly',
+            players: 120,
+          },
+          {
+            value: 'Bull',
+            players: 56,
+          },
+          {
+            value: 'Crow',
+            players: 21,
+          },
+        ]
+      },
+      {
+        name: 'Winrate',
+        value: '64%',
+        templateID: '3',
+        players: 345,
+        subProfiles: [
+          {
+            value: '63%',
+            players: 341,
+          },
+          {
+            value: '62%',
+            players: 334,
+          },
+          {
+            value: '61%',
+            players: 234,
+          },
+        ]
+      },
+      {
+        name: 'Retention',
+        value: 'D0',
+        templateID: '4',
+        players: 1231,
+        subProfiles: [
+          {
+            value: 'D3',
+            players: 120,
+          },
+          {
+            value: 'D2',
+            players: 56,
+          },
+          {
+            value: 'D1',
+            players: 21,
+          },
+        ]
+      },
+      {
+        name: 'Country',
+        value: 'USA',
+        templateID: '5',
+        players: 1231,
+        subProfiles: [
+          {
+            value: 'France',
+            players: 564,
+          },
+          {
+            value: 'Canada',
+            players: 341,
+          },
+          {
+            value: 'Germany',
+            players: 234,
+          },
+        ]
+      },
+      {
+        name: 'Total Summ Spent',
+        value: '$34',
+        templateID: '6',
+        players: 561,
+        subProfiles: [
+          {
+            value: '$54',
+            players: 120,
+          },
+          {
+            value: '$45',
+            players: 56,
+          },
+          {
+            value: '$76',
+            players: 21,
+          },
+        ]
+      },
+      {
+        name: 'IAP bought times',
+        value: '1',
+        templateID: '7',
+        players: 456,
+        subProfiles: [
+          {
+            value: '2',
+            players: 120,
+          },
+          {
+            value: '3',
+            players: 56,
+          },
+          {
+            value: '4',
+            players: 21,
+          },
+        ]
+      },
+      {
+        name: 'Segment',
+        value: 'New player',
+        templateID: '8',
+        players: 2312,
+        subProfiles: [
+        ]
+      },
+      ],
+    }))
+
+    res.status(200).json({ success: true, responseData });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+app.post('/api/analytics/getMainPaymentConversionFunnel', async (req, res) => {
+  const { gameID, branch, filterDate, filterSegments } = req.body;
+
+  try {
+
+    let randPayments = randomNumberInRange(1, 23);
+    let responseData = await generateRandomDataByNumber(1, randPayments, 4000, 10000, -0.5, 0, 0, 'payment', 'players')
+    responseData = responseData.map(item => ({
+      ...item,
+      meanPayment: randomNumberInRange(1, 15, true),
+      meanDaysToConvert: randomNumberInRange(1, 5),
+      revenue: randomNumberInRange(1000, 10000),
+      sales: randomNumberInRange(1000, 10000),
+    }))
+
+    res.status(200).json({ success: true, responseData });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 //
 // Overview page
 //
@@ -8263,57 +9622,427 @@ app.post('/api/analytics/getActiveSessions', async (req, res) => {
 
 });
 
+app.post('/api/analytics/getOfferAnalytics', async (req, res) => {
+  const {gameID, branchName, offerID} = req.body
+
+  try {
+
+    const responseData = {
+        revenue: 1346200,
+        revenuePositive: true,
+        declinerate: 27,
+        declineratePositive: false,
+        salesTotal: 9821,
+        salesTotalPositive: true,
+        impressions: 121021,
+        impressionsPositive: true,
+        avgProfile: [
+          {
+            name: 'Game Level',
+            value: '4',
+            templateID: '1',
+            players: 321,
+          },
+          {
+            name: 'Fav. Char',
+            value: 'Leon',
+            templateID: '2',
+            players: 632,
+          },
+          {
+            name: 'Winrate',
+            value: '64%',
+            templateID: '3',
+            players: 345,
+          },
+          {
+            name: 'Retention',
+            value: '4',
+            templateID: '4',
+            players: 1231,
+          },
+          {
+            name: 'Country',
+            value: 'USA',
+            templateID: '5',
+            players: 1231,
+          },
+          {
+            name: 'Total Summ Spent',
+            value: '$341',
+            templateID: '6',
+            players: 561,
+          },
+          {
+            name: 'IAP bought times',
+            value: '12',
+            templateID: '7',
+            players: 456,
+          },
+          {
+            name: 'Segment',
+            value: 'New player',
+            templateID: '8',
+            players: 2312,
+          },
+        ],
+        profile: [
+          {
+            name: 'Game Level',
+            value: '4',
+            players: 461,
+            subProfile: [
+              {
+                name: 'Fav. Char',
+                value: 'Leon',
+                players: 461,
+                subProfile: [
+                  {
+                    name: 'Fav. Char',
+                    value: 'Crow',
+                    players: 123,
+                  },
+                  {
+                    name: 'Fav. Char',
+                    value: 'Bull',
+                    players: 53,
+                  },
+                ]
+              },
+              {
+                name: 'Lose Streak',
+                value: 'Lilith',
+                players: 123,
+                subProfiles: [
+                  {
+                    name: 'Lose Streak',
+                    value: 'Crow',
+                    players: 123,
+                  },
+                ]
+              },
+              {
+                name: 'Fav. Char',
+                value: 'Tanya',
+                players: 252,
+                subProfiles: [
+                ]
+              },
+            ]
+          },
+          {
+            name: 'Fav. Char',
+            value: 'Leon',
+            players: 7974,
+            subProfile: [
+              {
+                name: 'Fav. Char',
+                value: 'Crow',
+                players: 461,
+                subProfile: [
+                  {
+                    name: 'Fav. Char',
+                    value: 'Shelly',
+                    players: 123,
+                  },
+                  {
+                    name: 'Fav. Char',
+                    value: 'Bull',
+                    players: 53,
+                  },
+                ]
+              },
+              {
+                name: 'Lose Streak',
+                value: '4',
+                players: 243,
+                subProfiles: [
+                  {
+                    name: 'Lose Streak',
+                    value: '3',
+                    players: 121,
+                  },
+                ]
+              },
+              {
+                name: 'Fav. Char',
+                value: 'Tanya',
+                players: 252,
+                subProfiles: [
+                ]
+              },
+            ]
+          }
+
+        ],
+        sales: [
+          {
+            date: '2023-01-01',
+            sales: 400,
+            revenue: 345,
+          },
+        ],
+        behTree: [
+          {
+            name: 'This offer',
+            type: 'iap',
+            share: 100,
+            subEvents: [
+              {
+                name: 'Level 4: Success',
+                type: 'gameplay',
+                share: 23,
+                subEvents: [
+                  {
+                    name: 'User Registration',
+                    type: 'registration',
+                    share: 6
+                  },
+                  {
+                    name: 'Item Purchased',
+                    type: 'purchase',
+                    share: 4
+                  },
+                  {
+                    name: 'Tutorial Completed',
+                    type: 'tutorial',
+                    share: 2
+                  },
+                  {
+                    name: 'Daily Login',
+                    type: 'login',
+                    share: 1
+                  }
+                ]
+              },
+              {
+                name: 'Game Store open',
+                type: 'ui',
+                share: 15,
+                subEvents: [
+                  {
+                    name: 'User Registration',
+                    type: 'registration',
+                    share: 3
+                  },
+                  {
+                    name: 'Item Purchased',
+                    type: 'purchase',
+                    share: 2
+                  },
+                  {
+                    name: 'Tutorial Completed',
+                    type: 'tutorial',
+                    share: 1
+                  },
+                  {
+                    name: 'Daily Login',
+                    type: 'login',
+                    share: 1
+                  }
+                ]
+              },
+              {
+                name: 'Battle pass open',
+                type: 'ui',
+                share: 5,
+                subEvents: [
+                  {
+                    name: 'User Registration',
+                    type: 'registration',
+                    share: 1
+                  },
+                  {
+                    name: 'Item Purchased',
+                    type: 'purchase',
+                    share: 1
+                  },
+                  {
+                    name: 'Tutorial Completed',
+                    type: 'tutorial',
+                    share: 0
+                  },
+                  {
+                    name: 'Daily Login',
+                    type: 'login',
+                    share: 0
+                  }
+                ]
+              },
+              {
+                name: 'Battle pass open',
+                type: 'ui',
+                share: 5,
+                subEvents: [
+                  {
+                    name: 'User Registration',
+                    type: 'registration',
+                    share: 1
+                  },
+                  {
+                    name: 'Item Purchased',
+                    type: 'purchase',
+                    share: 1
+                  },
+                  {
+                    name: 'Tutorial Completed',
+                    type: 'tutorial',
+                    share: 0
+                  },
+                  {
+                    name: 'Daily Login',
+                    type: 'login',
+                    share: 0
+                  }
+                ]
+              },
+                            {
+                name: 'Battle pass open',
+                type: 'ui',
+                share: 5,
+                subEvents: [
+                  {
+                    name: 'User Registration',
+                    type: 'registration',
+                    share: 1
+                  },
+                  {
+                    name: 'Item Purchased',
+                    type: 'purchase',
+                    share: 1
+                  },
+                  {
+                    name: 'Tutorial Completed',
+                    type: 'tutorial',
+                    share: 0
+                  },
+                  {
+                    name: 'Daily Login',
+                    type: 'login',
+                    share: 0
+                  }
+                ]
+              },
+            ]
+        },
+    ]
+    }
+
+    res.status(200).json({success: true, analytics: responseData})
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+})
 
 app.post('/api/analytics/getOfferSalesAndRevenue', async (req, res) => {
   const {gameID, branchName, filterDate, filterSegments, offerID} = req.body
 
   try {
 
-    const responseData = [
-      {
-        timestamp: '2024-03-18T10:00:00.000Z',
-        sales: 100,
-        revenue: 120,
-      },
-      {
-        timestamp: '2024-03-19T10:00:00.000Z',
-        sales: 150,
-        revenue: 165,
-      },
-      {
-        timestamp: '2024-03-20T10:00:00.000Z',
-        sales: 200,
-        revenue: 456,
-      },
-      {
-        timestamp: '2024-03-21T10:00:00.000Z',
-        sales: 312,
-        revenue: 432,
-      },
-      {
-        timestamp: '2024-03-22T10:00:00.000Z',
-        sales: 566,
-        revenue: 865,
-      },
-      {
-        timestamp: '2024-03-23T10:00:00.000Z',
-        sales: 642,
-        revenue: 777,
-      },
-      {
-        timestamp: '2024-03-24T10:00:00.000Z',
-        sales: 312,
-        revenue: 56,
-      },
-    ]
+    const endDate = new Date(filterDate[1])
+    const startDate = new Date(filterDate[0])
 
-    res.status(200).json({success: true, message: {data: responseData, granularity: 'day', deltaValue: 25}})
+    startDate.setUTCHours(0, 0, 0, 0);
+    endDate.setUTCHours(23, 59, 59, 999);
+
+    let generatedData = await generateRandomDataByDays(startDate, endDate, 80, 400, 0.1, 0.05)
+    let responseData = generatedData.map(item => ({
+      timestamp: item.timestamp,
+      sales: (item.value * randomNumberInRange(1.2, 2)).toFixed(0),
+      revenue: item.value,
+    }))
+    deltaValue = arraySum(responseData.map(item => item.revenue))
+
+
+    res.status(200).json({success: true, message: {data: responseData, granularity: 'day', deltaValue}})
   } catch (error) {
     console.log(error)
     res.status(500).json({success: false, message: 'Internal Server Error or No Data'})
   }
 });
 
+app.post('/api/analytics/getOverviewStatistics', async (req, res) => {
+  const {gameIDs} = req.body
+
+  try {
+
+    let endDate = new Date();
+    let startDate = new Date()
+    startDate.setDate(startDate.getDate() - 7);
+
+    startDate.setUTCHours(0, 0, 0, 0);
+    endDate.setUTCHours(23, 59, 59, 999);
+
+    let gamesData = await Promise.all(gameIDs.map(async (gameID) => {
+
+      let generatedData = await generateRandomDataByDays(
+        startDate, 
+        endDate, 
+        randomNumberInRange(-2000, 6000), 
+        randomNumberInRange(-5000, 10000), 
+        randomNumberInRange(-0.2, 0.2), 
+        0.5
+      )
+
+      generatedData = generatedData.map(item => ({
+        timestamp: item.timestamp,
+        users: (item.value * randomNumberInRange(1.2, 2)).toFixed(0),
+        revenue: item.value,
+      }))
+
+      generatedData = {
+        gameID: gameID,
+        deltaDau: arraySum(generatedData.map(item => parseFloat(item.users))).toFixed(0),
+        deltaRevenue: arraySum(generatedData.map(item => parseFloat(item.revenue))).toFixed(0),
+        data: generatedData.map(item => ({
+  
+          dau: {
+            timestamp: item.timestamp,
+            value: parseInt(item.users),
+          },
+  
+          revenue: {
+            timestamp: item.timestamp,
+            value: item.revenue,
+          },
+        }))
+      }
+      
+      return generatedData
+
+    }))
+
+    res.status(200).json({success: true, data: gamesData})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+})
+
+
+app.post('/api/getDashboards', async (req, res) => {
+  const {gameID, branch} = req.body
+
+  try {
+
+    let game = await CustomCharts.findOne({ 'gameID': gameID, 'branches.branch': branch })
+      
+    if (!game) {
+      console.log('Game not found or branch does not exist');
+    }
+
+    const branchItem = game.branches.find(b => b.branch === branch);
+    const dashboards = branch.dashboards;
+
+    res.status(200).json({success: true, dashboards: dashboards})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error'})
+  }
+})
 
 app.post('/api/testFunc', async (req, res) => {
   const {gameID, branchName} = req.body
