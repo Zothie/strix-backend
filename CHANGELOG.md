@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.4.0
+2024-03-31
+
+### Features
+
+- added localization and bulk edit (af12ce58ee0e80840a094a520fd399d42f110b9a)
+
 ## 1.3.1
 2024-03-28
 
