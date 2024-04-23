@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.5.0
+2024-04-12
+
+### Features
+
+- analytics demo data, added charts model (e3dc2524d93a36e93ddac069093ca364d9b61b00)
+
 ## 1.4.0
 2024-03-31
 
