@@ -1138,7 +1138,7 @@ async function checkForTemplatesByDesignEvent(gameID, branchName, event, clientI
 // valid topic and valid data are given to function
 const kafka = new Kafka({
   clientId: 'my-app123',
-  brokers: ['192.168.243.128:9092'], // Замените на адрес вашего Kafka-брокера
+  brokers: ['192.168.243.128:9092'],
 });
 const producer = kafka.producer();
 

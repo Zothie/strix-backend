@@ -6708,11 +6708,9 @@ app.post('/api/analytics/getDAU', async (req, res) => {
 });
 const randomNumberInRange = (min, max, isFloat) => {
   if (isFloat) {
-    return Math.random()
-        * (max - min + 1) + min;
+    return Math.random() * (max - min) + min;
   } else {
-    return Math.floor(Math.random()
-        * (max - min + 1)) + min;
+    return Math.round(Math.random() * (max - min)) + min;
   }
 };
 
@@ -6735,8 +6733,42 @@ async function generateRandomDataByDays(
 
   let randomData = [];
   while (currentDate <= endDate) {
-    let calcRandAdditiveTrend = trend - randomNumberInRange(-deviation, deviation)
-    let randomValue = lastGeneratedValue + (lastGeneratedValue * calcRandAdditiveTrend)
+    let calcRandAdditiveTrend = 1 - randomNumberInRange(-deviation, deviation)
+    let randomValue = lastGeneratedValue + (lastGeneratedValue * trend * calcRandAdditiveTrend)
+
+
+    randomValue = parseFloat(randomValue.toFixed(toFixedAmount));
+
+    randomData.push({
+      [categoryFieldName]: currentDate.toISOString(),
+      [valueFieldName]: randomValue
+    });
+
+    lastGeneratedValue = randomValue;
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return randomData;
+}
+function NonAsyncGenerateRandomDataByDays(
+  startDate, 
+  endDate, 
+  minValue, 
+  maxValue,
+  trend, 
+  deviation, 
+  toFixedAmount = 2, 
+  categoryFieldName = 'timestamp', 
+  valueFieldName = 'value'
+  ) {
+  let currentDate = new Date(startDate);
+  let lastGeneratedValue = randomNumberInRange(minValue, maxValue);
+
+  let randomData = [];
+  while (currentDate <= endDate) {
+    let calcRandAdditiveTrend = 1 - randomNumberInRange(-deviation, deviation)
+    let randomValue = lastGeneratedValue + (lastGeneratedValue * trend * calcRandAdditiveTrend)
 
 
     randomValue = parseFloat(randomValue.toFixed(toFixedAmount));
@@ -9349,7 +9381,7 @@ app.post('/api/analytics/getFirstPaymentConversionTime', async (req, res) => {
     let randDeviation = randomNumberInRange(3,5)
     responseData[randDeviation] = {
       day: responseData[randDeviation].day,
-      players: responseData[randDeviation].players * randomNumberInRange(1.2, 2)
+      players: responseData[randDeviation].players * randomNumberInRange(1.2, 2, true)
     }
 
     res.status(200).json({ success: true, message: {data: responseData, granularity: 'day'} });
@@ -9949,7 +9981,7 @@ app.post('/api/analytics/getOfferSalesAndRevenue', async (req, res) => {
     let generatedData = await generateRandomDataByDays(startDate, endDate, 80, 400, 0.1, 0.05)
     let responseData = generatedData.map(item => ({
       timestamp: item.timestamp,
-      sales: (item.value * randomNumberInRange(1.2, 2)).toFixed(0),
+      sales: (item.value * randomNumberInRange(1.2, 2, true)).toFixed(0),
       revenue: item.value,
     }))
     deltaValue = arraySum(responseData.map(item => item.revenue))
@@ -9961,7 +9993,6 @@ app.post('/api/analytics/getOfferSalesAndRevenue', async (req, res) => {
     res.status(500).json({success: false, message: 'Internal Server Error or No Data'})
   }
 });
-
 app.post('/api/analytics/getOverviewStatistics', async (req, res) => {
   const {gameIDs} = req.body
 
@@ -9969,51 +10000,89 @@ app.post('/api/analytics/getOverviewStatistics', async (req, res) => {
 
     let endDate = new Date();
     let startDate = new Date()
-    startDate.setDate(startDate.getDate() - 7);
+    startDate.setDate(startDate.getDate() - 6);
 
     startDate.setUTCHours(0, 0, 0, 0);
     endDate.setUTCHours(23, 59, 59, 999);
 
-    let gamesData = await Promise.all(gameIDs.map(async (gameID) => {
+    const dateDiff = (endDate - startDate) / (1000 * 60 * 60 * 24);
 
+    let overallData = []
+    for (let i = 0; i <= Math.floor(dateDiff); i++) {
+      overallData.push(
+        {
+        timestamp: '',
+        revenue: 0,
+        newUsers: 0,
+        retention: 0,
+        }
+      )
+    }
+
+    let gamesData = await Promise.all(gameIDs.map(async (gameID, gameIndex) => {
       let generatedData = await generateRandomDataByDays(
         startDate, 
         endDate, 
         randomNumberInRange(-2000, 6000), 
         randomNumberInRange(-5000, 10000), 
-        randomNumberInRange(-0.2, 0.2), 
+        randomNumberInRange(-0.2, 0.2, true), 
         0.5
       )
-
+      let retentionData = NonAsyncGenerateRandomDataByDays(
+        startDate, 
+        endDate, 
+        randomNumberInRange(1000, 6000), 
+        randomNumberInRange(1000, 10000), 
+        randomNumberInRange(-0.6, -0.87, true), 
+        0
+      )
+      
       generatedData = generatedData.map(item => ({
         timestamp: item.timestamp,
-        users: (item.value * randomNumberInRange(1.2, 2)).toFixed(0),
+        users: (item.value * randomNumberInRange(1.2, 2, true)).toFixed(0),
         revenue: item.value,
       }))
-
       generatedData = {
         gameID: gameID,
         deltaDau: arraySum(generatedData.map(item => parseFloat(item.users))).toFixed(0),
         deltaRevenue: arraySum(generatedData.map(item => parseFloat(item.revenue))).toFixed(0),
-        data: generatedData.map(item => ({
+        
+        data: generatedData.map((item, i) => {
+        
+          let dataObj = {
+            dau: {
+              timestamp: item.timestamp,
+              value: parseInt(item.users),
+            },
   
-          dau: {
-            timestamp: item.timestamp,
-            value: parseInt(item.users),
-          },
+            newUsers: {
+              timestamp: item.timestamp,
+              value: parseInt(item.users),
+            },
   
-          revenue: {
-            timestamp: item.timestamp,
-            value: item.revenue,
-          },
-        }))
+            retention: {
+              timestamp: item.timestamp,
+              value: retentionData[i].value,
+            },
+    
+            revenue: {
+              timestamp: item.timestamp,
+              value: item.revenue,
+            },
+          }
+        overallData[i].timestamp = dataObj.revenue.timestamp
+        overallData[i].revenue += dataObj.revenue.value
+        overallData[i].newUsers += dataObj.newUsers.value
+        overallData[i].retention += dataObj.retention.value
+        return dataObj
+        })
       }
       
       return generatedData
 
     }))
 
-    res.status(200).json({success: true, data: gamesData})
+    res.status(200).json({success: true, data: {overall: overallData,games: gamesData}})
 
   } catch (error) {
     console.log(error)
@@ -10027,6 +10096,62 @@ app.post('/api/getDashboards', async (req, res) => {
 
   try {
 
+    if (!gameID || !branch) {
+      return res.status(400).json({success: false, message: 'Missing required parameters'})
+    }
+
+    let game = await CustomCharts.findOne({ 'gameID': gameID, 'branches.branch': branch }).lean()
+      
+    if (!game) {
+      console.log('Game not found or branch does not exist');
+    }
+
+    const branchItem = game.branches.find(b => b.branch === branch);
+    const dashboards = branchItem.dashboards.map(d => ({...d, charts: JSON.parse(d.charts)}));
+
+    res.status(200).json({success: true, dashboards: dashboards})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error'})
+  }
+})
+app.post('/api/getDashboardByLink', async (req, res) => {
+  const {gameID, branch, linkName} = req.body
+
+  try {
+
+    if (!gameID || !branch) {
+      return res.status(400).json({success: false, message: 'Missing required parameters'})
+    }
+
+    let game = await CustomCharts.findOne({ 'gameID': gameID, 'branches.branch': branch }).lean()
+      
+    if (!game) {
+      console.log('Game not found or branch does not exist');
+    }
+
+    const branchItem = game.branches.find(b => b.branch === branch);
+    const dashboards = branchItem.dashboards.map(d => ({...d, charts: JSON.parse(d.charts)}));
+    let targetDashboard = dashboards.find(d => d.linkName === linkName)
+
+    console.log(dashboards)
+    res.status(200).json({success: true, dashboard: targetDashboard})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error'})
+  }
+})
+app.post('/api/addCustomDashboard', async (req, res) => {
+  const {gameID, branch, newDashboard} = req.body
+
+  try {
+
+    if (!gameID || !branch || !newDashboard) {
+      return res.status(400).json({success: false, message: 'Missing required parameters'})
+    }
+
     let game = await CustomCharts.findOne({ 'gameID': gameID, 'branches.branch': branch })
       
     if (!game) {
@@ -10034,9 +10159,84 @@ app.post('/api/getDashboards', async (req, res) => {
     }
 
     const branchItem = game.branches.find(b => b.branch === branch);
-    const dashboards = branch.dashboards;
+    let dashboards = branchItem.dashboards;
+    let targetDashboard = newDashboard
+    targetDashboard.charts = JSON.stringify(targetDashboard.charts)
+
+    await CustomCharts.findOneAndUpdate(
+      { 'gameID': gameID, 'branches.branch': branch }, 
+    { 
+      $push: { 'branches.$.dashboards': newDashboard } 
+    })
 
     res.status(200).json({success: true, dashboards: dashboards})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error'})
+  }
+})
+app.post('/api/removeCustomDashboard', async (req, res) => {
+  const {gameID, branch, dashboardID} = req.body
+
+  try {
+
+    if (!gameID || !branch || !dashboardID) {
+      return res.status(400).json({success: false, message: 'Missing required parameters'})
+    }
+
+    let game = await CustomCharts.findOne({ 'gameID': gameID, 'branches.branch': branch })
+      
+    if (!game) {
+      console.log('Game not found or branch does not exist');
+    }
+
+    await CustomCharts.findOneAndUpdate(
+      { 'gameID': gameID, 'branches.branch': branch }, 
+    { 
+      $pull: { 'branches.$.dashboards': { id: dashboardID } }
+    })
+
+    res.status(200).json({success: true})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error'})
+  }
+})
+app.post('/api/updateCustomDashboard', async (req, res) => {
+  const {gameID, branch, dashboardID, newDashboard} = req.body
+
+  try {
+
+    if (!gameID || !branch || !dashboardID || !newDashboard) {
+      return res.status(400).json({success: false, message: 'Missing required parameters'})
+    }
+
+    let game = await CustomCharts.findOne({ 'gameID': gameID, 'branches.branch': branch })
+      
+    if (!game) {
+      console.log('Game not found or branch does not exist');
+    }
+
+    const branchItem = game.branches.find(b => b.branch === branch);
+    const dashboards = branchItem.dashboards;
+    const targetIndex = dashboards.findIndex(d => d.id === dashboardID);
+
+    let updatedDashboard = newDashboard;
+    updatedDashboard.charts = JSON.stringify(updatedDashboard.charts);
+
+    await CustomCharts.findOneAndUpdate(
+      { 'gameID': gameID, 'branches.branch': branch, 'branches.dashboards.id': dashboardID },
+    { 
+      $set: { [`branches.$[outer].dashboards.${targetIndex}`]: updatedDashboard }
+    },
+    {
+      arrayFilters: [{ 'outer.branch': branch }]
+    }
+    )
+
+    res.status(200).json({success: true})
 
   } catch (error) {
     console.log(error)

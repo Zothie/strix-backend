@@ -1,12 +1,10 @@
 const mongoose = require('mongoose');
 
-const chartObjectsSchema = new mongoose.Schema({
-  chartObjects: String
-});
 const dashboardSchema = new mongoose.Schema({
   id: String,
   name: String,
-  charts: [chartObjectsSchema]
+  linkName: String,
+  charts: String
 });
 
 const branchSchema = new mongoose.Schema({
