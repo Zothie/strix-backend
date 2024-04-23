@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.6.0
+2024-04-23
+
+### Features
+
+- new API calls (18b989a03a0f319fd394eaa5e97668ab3a5c1c88)
+
 ## 1.5.0
 2024-04-12
 
