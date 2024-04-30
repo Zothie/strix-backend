@@ -10,6 +10,7 @@ const dashboardSchema = new mongoose.Schema({
 const branchSchema = new mongoose.Schema({
   branch: String,
   dashboards: [dashboardSchema],
+  profileCompositionPresets: String,
 });
 
 const gameSchema = new mongoose.Schema({

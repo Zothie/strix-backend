@@ -220,7 +220,7 @@ app.post('/api/addPublisher', async (req, res) => {
     }
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Произошла ошибка на сервере' });
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 });
 
@@ -251,56 +251,39 @@ app.post('/api/getPublishers', async (req, res) => {
 // Добавление студии к паблишеру
 app.post('/api/addStudio', async (req, res) => {
   // console.log("Новый запрос на создание студии");
-  const { publisherID, studioName, email } = req.body;
+  const { publisherID, studioName, apiKey, studioIcon } = req.body;
   // console.log(req.body);
 
+  if (!publisherID || !studioName || !apiKey) {
+    return res.status(400).json({ success: false, message: 'Missing required parameters' });
+  }
+
   try {
-    const user = await User.findOne({ email });
-    if (user) {
-      const studioID = uuid.v4();
-      // Создать нового паблишера
-      const studio = new Studio({ studioID, studioName });
-      // Сохранить паблишера в базу данных
-      await studio.save();
-      // console.log("Сохраняем студию");
-
-
-      // Добавляем новоиспечённый uuid студии к паблишеру
-      const publisher = await Publisher.findOne({ publisherID });
-      if (publisher) {
-        publisher.studios.push({ studioID });
-        await publisher.save();
-        // console.log("Сейвим студию в паблишера");
-      } else {
-        // console.log("Паблишер не найден.");
-      }
-
-      // Создать объект разрешения для read
-      const newPermission = { permission: 'read' };
-
-      // Найти пользователя в паблишерах и добавить разрешение
-      studio.users.push({ userID: user.email, userPermissions: [newPermission] });
-
-      // Сохранить обновленного паблишера
-      await studio.save();
-      // console.log("Сейвим студию с разрешением read для пользователя");
-
-      // Получить обновленный список паблишеров, у которых у пользователя есть права read
-      const studios = await Studio.find({ 'users.userID': user.email });
-
-      const result = studios.map(studio => ({
-        studioID: studio.studioID,
-        studioName: studio.studioName // Используем studioName из найденной студии
-      }));
-      res.json(result);
-
-    } else {
-      // Вернуть сообщение об ошибке, если пользователь не найден
-      res.status(404).json({ message: 'Пользователь не найден' });
+    const studioID = uuid.v4();
+    // Создать нового паблишера
+    const studio = new Studio({ studioID, studioName, apiKey, studioIcon });
+    // Сохранить паблишера в базу данных
+    await studio.save();
+    // console.log("Сохраняем студию");
+    // Добавляем новоиспечённый uuid студии к паблишеру
+    const publisher = await Publisher.findOne({ publisherID });
+    if (publisher) {
+      publisher.studios.push({ studioID });
+      await publisher.save();
     }
+    // Создать объект разрешения для read
+    // const newPermission = { permission: 'read' };
+    // Найти пользователя в паблишерах и добавить разрешение
+    // studio.users.push({ userID: user.email, userPermissions: [newPermission] });
+    // Сохранить обновленного паблишера
+    // await studio.save();
+    // console.log("Сейвим студию с разрешением read для пользователя");
+
+    res.json({success: true, message: 'Studio added successfully'});
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Произошла ошибка на сервере' });
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 });
 
@@ -314,13 +297,13 @@ app.post('/api/getPublisherStudios', async (req, res) => {
     if (publisher) {
       const studioIDs = publisher.studios.map(studio => studio.studioID);
 
-      // Затем найдите названия студий по соответствующим studioID
       const studios = await Studio.find({ studioID: { $in: studioIDs } })
-        .select('studioID studioName'); // Выбираем только studioID и studioName
+        .select('studioID studioName studioIcon');
 
       const result = studios.map(studio => ({
         studioID: studio.studioID,
-        studioName: studio.studioName // Используем studioName из найденной студии
+        studioName: studio.studioName,
+        studioIcon: studio.studioIcon,
       }));
 
       res.json({success: true, result});
@@ -335,28 +318,32 @@ app.post('/api/getPublisherStudios', async (req, res) => {
 
 
 
-// Просмотр всех игр в студии
+// Get all studio games
 app.post('/api/getStudioGames', async (req, res) => {
-  const { studioID } = req.body;
-  // console.log(studioID);
+  const { studioIDs } = req.body;
   try {
-    // Находим студию по studioID
-    const studio = await Studio.findOne({ studioID: studioID });
+    const studio = await Studio.find({ studioID: { $in: studioIDs } });
 
     if (!studio) {
       return res.status(404).json({ error: 'Студия не найдена' });
     }
 
-    // Получаем список gameID из схемы студии
-    const gameIDs = studio.games.map(game => game.gameID);
+    const gameIDs = studio
+                    .map(s => s.games
+                      .map(game => game.gameID))
+                    .reduce((acc, curr) => acc.concat(curr), []);
 
-    // Находим игры, соответствующие gameID
     const games = await Game.find({ gameID: { $in: gameIDs } });
-    // console.log(games);
-    res.json(games);
+
+    let studiosAndGames = studio.map(s => ({
+      studioID: s.studioID,
+      games: games.map(g => s.games.some(game => game.gameID === g.gameID) ? g : null).filter(Boolean)
+    }));
+
+    res.json(studiosAndGames);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Произошла ошибка на сервере' });
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
@@ -707,28 +694,188 @@ app.post('/api/removeGame', async (req, res) => {
 
   try {
     // Removing all documents with this game
-    Studio.findOneAndUpdate(
-      { studioID: studioID },
-      { $pull: { games: { gameID: gameID } } },
-      { new: true }
-    );
-    NodeModel.findOneAndRemove({ gameID });
-    Segments.findOneAndRemove({ gameID });
-    Relations.findOneAndRemove({ gameID });
-    PlayerWarehouse.findOneAndRemove({ gameID });
-    AnalyticsEvents.findOneAndRemove({ gameID });
-    RemoteConfig.findOneAndRemove({ gameID });
-    PlanningTreeModel.findOneAndRemove({ gameID });
+    // Studio.findOneAndUpdate(
+    //   { studioID: studioID },
+    //   { $pull: { games: { gameID: gameID } } },
+    //   { new: true }
+    // );
+    // NodeModel.findOneAndRemove({ gameID });
+    // Segments.findOneAndRemove({ gameID });
+    // Relations.findOneAndRemove({ gameID });
+    // PlayerWarehouse.findOneAndRemove({ gameID });
+    // AnalyticsEvents.findOneAndRemove({ gameID });
+    // RemoteConfig.findOneAndRemove({ gameID });
+    // PlanningTreeModel.findOneAndRemove({ gameID });
 
-    await Game.findOneAndRemove({ gameID });
+    const currentDate = new Date();
+    const deletionDate = new Date(currentDate);
+    deletionDate.setHours(currentDate.getHours() + 72);
 
-    res.status(200).json({success: true, message: 'Game removed successfully'})
+    await Game.findOneAndUpdate({gameID}, {$set: {scheduledDeletionDate: deletionDate}}, {new: true, upsert: true});
+
+    // await Game.findOneAndRemove({ gameID });
+
+    res.status(200).json({success: true, message: 'Game scheduled successfully'})
 
   } catch (error) {
     console.error('Error removeGame:', error)
     res.status(200).json({success: false, message: 'Internal Server Error'})
   }
 });
+app.post('/api/cancelRemoveGame', async (req, res) => {
+
+  const {studioID, gameID} = req.body
+
+  try {
+    // Removing all documents with this game
+    // Studio.findOneAndUpdate(
+    //   { studioID: studioID },
+    //   { $pull: { games: { gameID: gameID } } },
+    //   { new: true }
+    // );
+    // NodeModel.findOneAndRemove({ gameID });
+    // Segments.findOneAndRemove({ gameID });
+    // Relations.findOneAndRemove({ gameID });
+    // PlayerWarehouse.findOneAndRemove({ gameID });
+    // AnalyticsEvents.findOneAndRemove({ gameID });
+    // RemoteConfig.findOneAndRemove({ gameID });
+    // PlanningTreeModel.findOneAndRemove({ gameID });
+
+    await Game.findOneAndUpdate({gameID}, {$unset: { scheduledDeletionDate: "" }}, {new: true, upsert: true});
+
+    // await Game.findOneAndRemove({ gameID });
+
+    res.status(200).json({success: true, message: 'Game scheduled successfully'})
+
+  } catch (error) {
+    console.error('Error removeGame:', error)
+    res.status(200).json({success: false, message: 'Internal Server Error'})
+  }
+});
+
+
+// Getting studio details for settings modal
+app.post('/api/getStudioDetails', async (req, res) => {
+  try {
+    const {studioID} = req.body;
+    if (!studioID) {
+      return res.status(400).send('Studio ID is required');
+    }
+
+    const studio = await Studio.findOne({ studioID: studioID });
+    if (!studio) {
+      return res.status(404).send('Studio not found');
+    }
+
+    res.json({ success: true,
+      studioName: studio.studioName,
+      studioIcon: studio.studioIcon,
+      apiKey: studio.apiKey,
+      scheduledDeletionDate: studio.scheduledDeletionDate
+    });
+  } catch (error) {
+    console.error('Error fetching studio details:', error.message);
+    res.status(500).send('Internal Server Error');
+  }
+});
+// Changing game details
+app.post('/api/updateStudioDetails', async (req, res) => {
+  try {
+    const { studioID, studioName, studioIcon, apiKey } = req.body;
+    if (!studioID) {
+      return res.status(400).send('Studio ID is required');
+    }
+
+    const updatedData = {};
+    if (studioName) updatedData.studioName = studioName;
+    if (studioIcon) updatedData.studioIcon = studioIcon;
+    if (apiKey) updatedData.apiKey = apiKey;
+
+    const studio = await Studio.findOneAndUpdate({ studioID: studioID }, updatedData, { new: true });
+    if (!studio) {
+      return res.status(404).send('Studio not found');
+    }
+
+    res.json({success: true});
+  } catch (error) {
+    console.error('Error updating studio details:', error.message);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/api/revokeStudioKey', async (req, res) => {
+  try {
+    const { studioID } = req.body;
+
+    const updatedData = {};
+    updatedData.apiKey = uuid.v4();
+
+    const studio = await Studio.findOneAndUpdate({ studioID: studioID }, updatedData, { new: true });
+    if (!studio) {
+      return res.status(404).send('Studio not found');
+    }
+
+    res.json({success: true, message: 'Studio key revoked', apiKey: updatedData.apiKey});
+  } catch (error) {
+    console.error('Error revoking studio key:', error.message);
+    res.status(500).send('Internal Server Error');
+  }
+});
+app.post('/api/revokeGameKey', async (req, res) => {
+  try {
+    const { gameID } = req.body;
+
+    const updatedData = {};
+    updatedData.gameSecretKey = uuid.v4();
+
+    const game = await Game.findOneAndUpdate({ gameID: gameID }, updatedData, { new: true });
+    if (!game) {
+      return res.status(404).send('Game not found');
+    }
+
+    res.json({success: true, message: 'Game key revoked', apiKey: updatedData.gameSecretKey});
+  } catch (error) {
+    console.error('Error revoking game key:', error.message);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+app.post('/api/removeStudio', async (req, res) => {
+  try {
+    const { studioID } = req.body;
+
+    const currentDate = new Date();
+    const deletionDate = new Date(currentDate);
+    deletionDate.setHours(currentDate.getHours() + 72);
+
+    await Studio.findOneAndUpdate({ studioID: studioID }, {$set: {scheduledDeletionDate: deletionDate}}, {new: true, upsert: true});
+
+    res.json({success: true, message: 'Studio scheduled for removal successfully'})
+
+  } catch (error) {
+    console.error('Error removeStudio:', error)
+    res.status(200).json({success: false, message: 'Internal Server Error'})
+  }
+});
+app.post('/api/cancelRemoveStudio', async (req, res) => {
+
+  const {studioID} = req.body
+
+  try {
+    const studio = await Studio.findOneAndUpdate({ studioID: studioID }, {$unset: { scheduledDeletionDate: "" }}, {new: true, upsert: true});
+
+    if (!studio) {
+      return res.status(404).send('Studio not found');
+    }
+
+    res.json({success: true, message: 'Studio removed successfully'})
+
+  } catch (error) {
+    console.error('Error removeStudio:', error)
+    res.status(200).json({success: false, message: 'Internal Server Error'})
+  }
+});
+
 
 // Getting game details for settings modal
 app.post('/api/getGameDetails', async (req, res) => {
@@ -738,7 +885,7 @@ app.post('/api/getGameDetails', async (req, res) => {
       return res.status(400).send('Game ID is required');
     }
 
-    const game = await Game.findOne({ gameID: gameID }, 'gameName gameEngine gameIcon gameSecretKey');
+    const game = await Game.findOne({ gameID: gameID });
     if (!game) {
       return res.status(404).send('Game not found');
     }
@@ -747,7 +894,8 @@ app.post('/api/getGameDetails', async (req, res) => {
       gameName: game.gameName,
       gameEngine: game.gameEngine,
       gameIcon: game.gameIcon,
-      gameSecretKey: game.gameSecretKey
+      gameSecretKey: game.gameSecretKey,
+      gameScheduledDeletionDate: game.scheduledDeletionDate
     });
   } catch (error) {
     console.error('Error fetching game details:', error.message);
@@ -4052,7 +4200,7 @@ app.post('/api/updateAnalyticsEvent', async (req, res) => {
 
     let tempObj = eventObject;
     tempObj.values = tempObj.values.map(value => {
-      value._id = new mongoose.Types.ObjectId().toString();
+      value._id = mongoose.Types.ObjectId(value._id);
       return value;
     });
 
@@ -5039,7 +5187,7 @@ app.post('/api/getCategorizedRemoteConfigParams', async (req, res) => {
 //
 app.post('/api/getAllAnalyticsEvents', async (req, res) => {
   try {
-    const { gameID, branchName } = req.body;
+    const { gameID, branchName, shouldReturnValues } = req.body;
 
     const node = await NodeModel.findOne({
       'branches.branch': branchName,
@@ -5071,6 +5219,9 @@ app.post('/api/getAllAnalyticsEvents', async (req, res) => {
                     eventCodeName: event
                       ? event.branches.find(b => b.branch === branchName)?.events.find(e => e.eventID === eventID)?.eventCodeName || 'Event ID not found'
                       : 'Event ID not found',
+                    values: shouldReturnValues
+                      ? event.branches.find(b => b.branch === branchName)?.events.find(e => e.eventID === eventID)?.values || 'Event values not found'
+                      : 'Event values not found',
                   };
                 })),
               }],
@@ -8945,6 +9096,356 @@ app.post('/api/analytics/getAdsRevenue', async (req, res) => {
 
 
 });
+
+let generatedPWPlayers = []
+async function generateRandomPWPlayers() {
+
+  let gameID = '0c2265e9-9fb1-49be-8f01-807f66c48522'
+  let branchName = 'development'
+
+
+    // Найти документ PlayerWarehouse по gameID и branchName
+    let playerWarehouse = await PlayerWarehouse.findOne({
+      gameID,
+      'branches.branch': branchName,
+    });
+
+    // Если не найден, создать новый документ
+    if (!playerWarehouse) {
+      playerWarehouse = await PlayerWarehouse.create({
+        gameID,
+        branches: [{ branch: branchName, templates: {} }],
+      });
+    }
+
+    // Извлечь нужный branch
+    const branch = playerWarehouse.branches.find((b) => b.branch === branchName);
+
+    // Вернуть объект templates из найденного branch
+    let templates = branch ? branch.templates : {};
+
+    // Поиск нужных ивентов в базе данных
+    let events = await AnalyticsEvents.findOne(
+      {
+        'gameID': gameID,
+        'branches': {
+          $elemMatch: {
+            'branch': branchName,
+          },
+        },
+      },
+      {
+        'branches.$': 1,
+      }
+    );
+    
+    if (!events) {
+      return res.status(404).json({ error: 'Events not found' });
+    }
+    events = events.branches[0].events
+
+    let segments = await Segments.findOne({ gameID, 'branches.branch': branchName });
+    const segmentBranch = segments.branches.find(b => b.branch === branchName);
+    segments = segmentBranch ? segmentBranch.segments : [];
+    segments = segments.map(segment => segment.segmentID)
+    .filter(segment => segment !== 'everyone')
+
+
+    let templatesTypes = {}
+
+    templatesTypes.analytics = templates.analytics.map(template => (
+      {
+        id: template.templateID,
+        type: events
+          .find(e => e.eventID === template.templateAnalyticEventID)
+          .values
+          .find(v => v._id.toString() === template.templateEventTargetValueId)
+          .valueFormat
+      }
+    ))
+    templatesTypes.statistics = templates.statistics.map(template => (
+      {
+        id: template.templateID,
+        type: template.templateType
+      }
+    ))
+
+
+
+    
+
+    function pickRandomSegments() {
+      const numberOfSegments = segments.length;
+      const shuffledIndexes = shuffle(Array.from(Array(numberOfSegments).keys()));
+
+      let chosenSegments = [];
+      for (let i = 0; i < randomNumberInRange(0, numberOfSegments); i++) {
+          chosenSegments.push(segments[shuffledIndexes[i]]);
+      }
+
+      return ['everyone', ...chosenSegments];
+    }
+    function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    const words = [
+        "apple", "banana", "orange", "grape", "strawberry",
+        "peach", "pear", "watermelon", "pineapple", "kiwi",
+        "mango", "blueberry", "raspberry", "blackberry", "cherry",
+        "plum", "lemon", "lime", "apricot", "pomegranate",
+        "avocado", "coconut", "fig", "guava", "nectarine",
+        "papaya", "lychee", "passionfruit", "dragonfruit", "melon",
+        "starfruit", "cranberry", "kiwifruit", "tangerine", "persimmon",
+        "mulberry", "boysenberry", "gooseberry", "apricot", "cantaloupe",
+        "kumquat", "rhubarb", "date", "quince", "elderberry",
+        "plantain", "pumpkin", "squash", "zucchini", "eggplant"
+    ];
+
+    function getRandomWord() {
+        const randomIndex = Math.floor(Math.random() * words.length);
+        return words[randomIndex];
+    }
+
+    function getRandomElementValue(type) {
+      if (type === 'string') {
+        return getRandomWord();
+      } 
+      if (type === 'integer') {
+        return randomNumberInRange(10, 100);
+      }
+      if (type === 'float') {
+        return randomNumberInRange(10, 100, true);
+      }
+      if (type === 'bool') {
+        return randomNumberInRange(0, 1) === 1;
+      }
+    }
+    // 153567
+    for (let i = 0; i < 153567; i++) {
+      generatedPWPlayers.push({
+        clientID: uuid.v4(),
+        segments: pickRandomSegments(),
+        elements: []
+            .concat(
+              templatesTypes.analytics.map(template => ({
+                elementID: template.id,
+                elementValue: getRandomElementValue(template.type),
+              }))
+            )
+            .concat(
+                templatesTypes.statistics.map(template => ({
+                elementID: template.id,
+                elementValue: getRandomElementValue(template.type),
+              }))
+            )
+        // elements: {
+        //   analytics: templatesTypes.analytics.map(template => ({
+        //     elementID: template.id,
+        //     elementValue: getRandomElementValue(template.type),
+        //   })),
+        //   statistics: templatesTypes.statistics.map(template => ({
+        //     elementID: template.id,
+        //     elementValue: getRandomElementValue(template.type),
+        //   })),
+        // }
+      })
+    }
+
+    console.log('Generated PW players')
+}
+generateRandomPWPlayers()
+
+app.post('/api/analytics/getProfileComposition', async (req, res) => {
+  const {
+    gameID, branchName, 
+    
+    // Filtering
+    baseSegment, filters, 
+
+    // Bubble chart
+    element1, element2, element3,
+
+  } = req.body
+
+  try {
+
+    const composition = generatedPWPlayers.filter(p => getComposition(p))
+
+
+    function getComposition(player) {
+
+      if (!player.segments.includes(baseSegment)) return false
+      for (const filter of filters) {
+
+        let targetElement = player.elements
+                            .find(element => element.elementID === filter.templateID)
+
+        if (!targetElement) {
+          return false
+        } else {
+          switch (filter.filterCondition) {
+            case 'is':
+              if (targetElement.elementValue !== filter.filterValue) {
+                return false
+              }
+              break;
+            case 'is not':
+              if (targetElement.elementValue === filter.filterValue) {
+                return false
+              }
+              break;
+            case 'contains':
+              if (!targetElement.elementValue.includes(filter.filterValue)) {
+                return false
+              }
+              break;
+            case 'starts with':
+              if (!targetElement.elementValue.startsWith(filter.filterValue)) {
+                return false
+              }
+              break;
+            case 'ends with':
+              if (!targetElement.elementValue.endsWith(filter.filterValue)) {
+                return false
+              }
+              break;
+            case '>':
+              if (targetElement.elementValue <= filter.filterValue) {
+                return false
+              }
+              break;
+            case '<':
+              if (targetElement.elementValue >= filter.filterValue) {
+                return false
+              }
+              break;
+            case '>=':
+              if (targetElement.elementValue < filter.filterValue) {
+                return false
+              }
+              break;
+            case '<=':
+              if (targetElement.elementValue > filter.filterValue) {
+                return false
+              }
+              break;
+            default:
+              return false
+          }
+        }
+      }
+      return true
+    }
+
+  function getElementValue(player, elementID) {
+    let targetValue = player.elements
+        .find(element => element.elementID === elementID)
+    if (!targetValue) {
+      return 0;
+    } else {
+      return targetValue.elementValue;
+    }
+  }
+
+  function getRandomSample(players, confidenceLevel) {
+    const n = players.length;
+    // console.log('Number of players:', n);
+
+    const expectedProportion = 0.5;
+    const marginOfError = 0.05;
+
+    const z = confidenceLevel === 0.95 ? 1.96 : 2.58;
+
+    const sampleSize = Math.ceil(Math.pow((z * Math.sqrt(expectedProportion * (1 - expectedProportion))) / marginOfError, 2));
+    // console.log('Sample size:', sampleSize);
+
+    const sample = [];
+    for (let i = 0; i < sampleSize; i++) {
+        const randomIndex = Math.floor(Math.random() * n);
+        sample.push(players[randomIndex]);
+    }
+  
+    return sample;
+  }
+  
+  function pickElement(player, targetElementID, axis) {
+    // if (player.elements !== null) {
+    //   player.flattenedElements = player.elements.statistics.concat(player.elements.analytics)
+    //   player.elements = null;
+    // }
+
+    let foundElementValue = player.elements
+                            .find(element => element.elementID === targetElementID)
+    if (!foundElementValue) {
+      player[axis] = 0;
+      return 0;
+    } else {
+      player[axis] = foundElementValue.elementValue;
+      return foundElementValue.elementValue
+    }
+  }
+  function calculateWeight(player) {
+    let tempElement1 = pickElement(player, element1, 'x');
+    let tempElement2 = pickElement(player, element2, 'y');
+    let tempElement3 = pickElement(player, element3, 'r');
+
+    return tempElement1 + tempElement2 + tempElement3;
+  }
+
+  let sample = [];
+  if (element1 !== '' || element2 !== '') {
+    sample = getRandomSample(composition, 0.95).filter(Boolean);
+  }
+
+
+
+  res.status(200).json({ success: true, composition: composition.length, sample: sample });
+
+  } catch (error) {
+    console.log(error)
+    res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+});
+
+app.post('/api/getProfileCompositionPreset', async (req, res) => {
+  const { gameID, branchName } = req.body
+  try {
+    const charts = await CustomCharts.findOne({ gameID, 'branches.branch': branchName })
+    if (!charts) {
+      return res.status(404).json({ success: false, message: 'Charts not found' })
+    }
+    let branch = charts.branches.find(b => b.branch === branchName)
+    branch.profileCompositionPresets = JSON.parse(branch.profileCompositionPresets)
+
+    res.status(200).json({ success: true, message: { presets: branch.profileCompositionPresets } })
+  } catch (error) {
+    console.log(error)
+    res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+});
+app.post('/api/setProfileCompositionPreset', async (req, res) => {
+  const { gameID, branchName, presets = [] } = req.body
+  try {
+    const result = await CustomCharts.findOneAndUpdate(
+      { gameID, 'branches.branch': branchName },
+      { $set: { 'branches.$.profileCompositionPresets': JSON.stringify(presets) } }
+    );
+    if (!result) {
+      return res.status(404).json({ success: false, message: 'Charts not found' });
+    }
+
+    res.status(200).json({ success: true, message: 'Profile composition preset set' })
+  } catch (error) {
+    console.log(error)
+    res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+});
+
 app.post('/api/analytics/getAdsRevenuePerType', async (req, res) => {
   const {gameID, branchName, filterDate, filterSegments} = req.body
 
@@ -9993,6 +10494,104 @@ app.post('/api/analytics/getOfferSalesAndRevenue', async (req, res) => {
     res.status(500).json({success: false, message: 'Internal Server Error or No Data'})
   }
 });
+
+app.post('/api/analytics/getOverviewStatisticsForPublisher', async (req, res) => {
+  const {studioIDs} = req.body
+
+  try {
+
+    let endDate = new Date();
+    let startDate = new Date()
+    startDate.setDate(startDate.getDate() - 6);
+
+    startDate.setUTCHours(0, 0, 0, 0);
+    endDate.setUTCHours(23, 59, 59, 999);
+
+    const dateDiff = (endDate - startDate) / (1000 * 60 * 60 * 24);
+
+    let overallData = []
+    for (let i = 0; i <= Math.floor(dateDiff); i++) {
+      overallData.push(
+        {
+        timestamp: '',
+        revenue: 0,
+        newUsers: 0,
+        retention: 0,
+        }
+      )
+    }
+
+    let studiosData = await Promise.all(studioIDs.map(async (studioID, studioIndex) => {
+      let generatedData = await generateRandomDataByDays(
+        startDate, 
+        endDate, 
+        randomNumberInRange(-2000, 6000), 
+        randomNumberInRange(-5000, 10000), 
+        randomNumberInRange(-0.2, 0.2, true), 
+        0.5
+      )
+      let retentionData = NonAsyncGenerateRandomDataByDays(
+        startDate, 
+        endDate, 
+        randomNumberInRange(1000, 6000), 
+        randomNumberInRange(1000, 10000), 
+        randomNumberInRange(-0.6, -0.87, true), 
+        0
+      )
+      
+      generatedData = generatedData.map(item => ({
+        timestamp: item.timestamp,
+        users: (item.value * randomNumberInRange(1.2, 2, true)).toFixed(0),
+        revenue: item.value,
+      }))
+      generatedData = {
+        studioID: studioID,
+        deltaDau: arraySum(generatedData.map(item => parseFloat(item.users))).toFixed(0),
+        deltaRevenue: arraySum(generatedData.map(item => parseFloat(item.revenue))).toFixed(0),
+        
+        data: generatedData.map((item, i) => {
+        
+          let dataObj = {
+            dau: {
+              timestamp: item.timestamp,
+              value: parseInt(item.users),
+            },
+  
+            newUsers: {
+              timestamp: item.timestamp,
+              value: parseInt(item.users),
+            },
+  
+            retention: {
+              timestamp: item.timestamp,
+              value: retentionData[i].value,
+            },
+    
+            revenue: {
+              timestamp: item.timestamp,
+              value: item.revenue,
+            },
+          }
+        overallData[i].timestamp = dataObj.revenue.timestamp
+        overallData[i].revenue += dataObj.revenue.value
+        overallData[i].newUsers += dataObj.newUsers.value
+        overallData[i].retention += dataObj.retention.value
+        return dataObj
+        })
+      }
+      
+      return generatedData
+
+    }))
+
+    res.status(200).json({success: true, data: {overall: overallData, studios: studiosData}})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error or No Data'})
+  }
+})
+
 app.post('/api/analytics/getOverviewStatistics', async (req, res) => {
   const {gameIDs} = req.body
 

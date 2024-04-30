@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 const studiosSchema = new mongoose.Schema({
     studioID: String,
     studioName: String,
+    studioIcon: String,
+    apiKey: String,
+    scheduledDeletionDate: Date,
     games: [{ 
       gameID: String }],
     users: [{ 

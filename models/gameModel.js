@@ -2,22 +2,26 @@ const mongoose = require('mongoose');
 const gamesSchema = new mongoose.Schema({
     gameID: {
       type: String,
-      required: true, // Обязательное поле
+      required: true,
     },
     gameName: {
-      type: String, // Тип данных для gameName (предположим, что это строка)
-      required: true, // Обязательное поле
+      type: String,
+      required: true,
     },
     gameEngine: {
-      type: String, // Тип данных для gameEngine (предположим, что это строка)
-      required: true, // Обязательное поле
+      type: String,
+      required: true,
     },
     gameIcon: {
-      type: String, // Тип данных для gameIcon (предположим, что это строка, представляющая путь к изображению)
+      type: String,
     },
     gameSecretKey: {
-      type: String, // Тип данных для gameSecretKey (предположим, что это строка)
-      required: true, // Обязательное поле
+      type: String,
+      required: true,
+    },
+    scheduledDeletionDate: {
+      type: Date,
+      required: false,
     },
   });
   const Game = mongoose.model('Game', gamesSchema);
