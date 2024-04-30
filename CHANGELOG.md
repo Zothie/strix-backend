@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.7.0
+2024-04-30
+
+### Features
+
+- minor changes (31c303784c14f5ed01ddea4c12d3b3a0ddba1c27)
+
 ## 1.6.0
 2024-04-23
 
