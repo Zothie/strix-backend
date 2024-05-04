@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.8.0
+2024-05-04
+
+### Features
+
+- onboarding API, user management (72828a5859bbbe7eff79224c376fe868ff06195c)
+
 ## 1.7.0
 2024-04-30
 
