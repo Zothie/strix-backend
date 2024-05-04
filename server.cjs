@@ -94,7 +94,7 @@ app.use(cors(corsOptions));
 
 // Регистрация нового пользователя
 app.post('/api/register', async (req, res) => {
-  const { username, email, password } = req.body;
+  const { email, password } = req.body;
 
   try {
 
@@ -104,8 +104,8 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is already registered' });
     }
     // Создаем нового пользователя
-    const newUser = new User({ username, email, password });
-    // await newUser.save();
+    const newUser = new User({ email, password });
+    await newUser.save();
 
     admin.auth()
       // Serve email as uid
@@ -127,12 +127,9 @@ app.post('/api/login', async (req, res) => {
 
   try {
     const user = await User.findOne({ email });
-    console.log( user ? `User found by email` : 'User not found');
 
     if (user) {
-      console.log('User:', user, user.password)
       const isPasswordMatch = password === user.password;
-      console.log('Comparing result: ', isPasswordMatch, '. Compared ', password, ' and ', user.password);
 
       if (isPasswordMatch) {
 
@@ -182,41 +179,147 @@ app.post('/api/logout', async (req, res) => {
  });
 });
 
-// Добавление нового паблишера, назначение создателя всеми правами на свете
-app.post('/api/addPublisher', async (req, res) => {
-  // console.log("Новый запрос на создание паблишера");
-  const { publisherName, email } = req.body;
-  // console.log(req.body);
+app.post('/api/finishInitialOnboarding', async (req, res) => {
+  const { publisherName, email, username, jobTitle, studioName, studioApiKey, studioIcon } = req.body;
 
   try {
     const user = await User.findOne({ email });
     if (user) {
+
+      user.role = jobTitle;
+      user.username = username;
+      await user.save();
+
       const publisherID = uuid.v4();
-      // Создать нового паблишера
       const publisher = new Publisher({ publisherID, publisherName });
-      // Сохранить паблишера в базу данных
-      await publisher.save();
-      // console.log("Сохраняем паблишера");
-
-      // Создать объект разрешения для read
       const newPermission = { permission: 'read' };
-
-      // Найти пользователя в паблишерах и добавить разрешение
       publisher.users.push({ userID: user.email, userPermissions: [newPermission] });
 
-      // Сохранить обновленного паблишера
-      await publisher.save();
-      // console.log("Сейвим паблишера с разрешением read для пользователя");
 
-      // Получить обновленный список паблишеров, у которых у пользователя есть права read
-      res.json({
+      const studioID = uuid.v4();
+      const studio = new Studio({ studioID, studioName, apiKey: studioApiKey, studioIcon });
+      await studio.save();
+  
+      publisher.studios.push({ studioID });
+      await publisher.save();
+
+
+      async function createDemoGame() {
+            // const demoGameID = `demoGame`;
+            const demoGameID = `a5f10dcc-84e2-4c7d-90eb-37f172131396`;
+
+            const newGameID = `demoGame_${uuid.v4()}`;
+
+            const demoGame = await Game.findOne({ gameID: demoGameID });
+            const newGame = new Game({
+              gameID: newGameID,
+              gameName: demoGame.gameName,
+              gameEngine: demoGame.gameEngine,
+              gameIcon: demoGame.gameIcon,
+              gameSecretKey: uuid.v4(),
+            });
+            await newGame.save();
+          
+            const updatedStudio = await Studio.findOneAndUpdate(
+              { studioID: studioID },
+              { $push: { games: { gameID: newGameID } } },
+              { new: true }
+            );
+          
+            //
+            //
+            // Populating existing collestions with new game
+            //
+            //
+            // Creating new game doc in NodeModel
+            const demoNodeModel = NodeModel.findOne({ gameID: demoGameID });
+            const newNodeModel = new NodeModel({
+              gameID: newGameID,
+              ...demoNodeModel
+            });
+            await newNodeModel.save();
+          
+            // Creating new game doc in AnalyticsEvents
+            const demoAnalyticsEvents = AnalyticsEvents.findOne({ gameID: demoGameID });
+            const newAnalyticsEvents = new AnalyticsEvents({
+              gameID: newGameID,
+              ...demoAnalyticsEvents
+            });
+            await newAnalyticsEvents.save();
+          
+            // Creating new game doc in PlayerWarehouse
+            const demoPlayerWarehouse = PlayerWarehouse.findOne({ gameID: demoGameID });
+            const newPlayerWarehouse = new PlayerWarehouse({
+              gameID: newGameID,
+              ...demoPlayerWarehouse
+            });
+            await newPlayerWarehouse.save();
+          
+            // Creating new game doc in RemoteConfig
+            const demoRemoteConfig = RemoteConfig.findOne({ gameID: demoGameID });
+            const newRemoteConfig = new RemoteConfig({
+              gameID: newGameID,
+              ...demoRemoteConfig
+            });
+            await newRemoteConfig.save();
+          
+            // Creating new game doc in Segments
+            const demoSegments = Segments.findOne({ gameID: demoGameID });
+            const newSegments = new Segments({
+              gameID: newGameID,
+              ...demoSegments
+            });
+            await newSegments.save();
+          
+            // Creating new game doc in Planning Tree
+            const demoTree = PlanningTreeModel.findOne({ gameID: demoGameID });
+            const newTree = {
+              gameID: newGameID,
+              ...demoTree
+            };
+            await PlanningTreeModel.create(newTree);
+          
+            // Creating new game doc in Relations
+            const demoRelations = Relations.findOne({ gameID: demoGameID });
+            const newRelations = new Relations({
+              gameID: newGameID,
+              ...demoRelations
+            });
+            await newRelations.save();
+          
+            // Creating new game doc in Localization
+            const demoLocalization = Localization.findOne({ gameID: demoGameID });
+            const newLocalization = new Localization({
+              gameID: newGameID,
+              ...demoLocalization
+            });
+            await newLocalization.save();
+          
+            const demoOffers = Offers.findOne({ gameID: demoGameID });
+            const newOffers = new Offers({
+              gameID: newGameID,
+              ...demoOffers
+            });
+            await newOffers.save();
+          
+            const demoCustomCharts = CustomCharts.findOne({ gameID: demoGameID });
+            const newCustomCharts = new CustomCharts({
+              gameID: newGameID,
+              ...demoCustomCharts
+            });
+            await newCustomCharts.save();
+      }
+      // createDemoGame()
+
+
+      res.status(200).json({
+        success: true,
+        message: 'User onboarded successfully',
         publisherID: publisher.publisherID,
         publisherName: publisher.publisherName,
       });
-      // console.log('Создан паблишер с именем:', publisherName, 'и ID:', publisherID);
     } else {
-      // Вернуть сообщение об ошибке, если пользователь не найден
-      res.status(404).json({ message: 'Пользователь не найден' });
+      res.status(404).json({ message: 'User not found' });
     }
   } catch (error) {
     console.error(error);
@@ -245,6 +348,18 @@ app.post('/api/getPublishers', async (req, res) => {
   res.json({success: true, publishers});
 });
 
+app.post('/api/getUser', async (req, res) => {
+  const { email } = req.body;
+
+  // Найдите пользователя по email
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    return res.status(200).json({ success: false, error: 'User not found' });
+  }
+
+  res.status(200).json({ success: true, user });
+});
 
 
 
@@ -686,7 +801,6 @@ app.post('/api/createGame', async (req, res) => {
     res.status(200).json({ success: false, error: 'Internal server error' });
   }
 });
-
 // Removing game
 app.post('/api/removeGame', async (req, res) => {
 
@@ -1373,7 +1487,6 @@ async function addBasicEntityToParentInBulk(gameID, branch, parentIds, newNodes,
 
     const findAndUpdateNode = (nodes, index) => {
       for (const node of nodes) {
-        console.log('Comparing', node._id.toString(), 'with', parentIds[index]);
         if (node._id.toString() === parentIds[index]) {
           const newNodeObject = {
             nodeID: newNodes[index],
@@ -1429,7 +1542,6 @@ async function addEntityToParent(gameID, branch, parentId, newNode, isCategory) 
     // Рекурсивная функция для поиска и обновления узла
     const findAndUpdateNode = (nodes) => {
       for (const node of nodes) {
-        console.log('Comparing', node._id.toString(), 'with', parentId)
         if (node._id.toString() === parentId) {
           // Найден узел с соответствующим parentId
           const newNodeObject = {
@@ -4956,6 +5068,43 @@ app.post('/api/addStatisticsTemplate', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+app.post('/api/updateStatisticsTemplate', async (req, res) => {
+  const { gameID, branchName, templateID, templateObject } = req.body;
+
+  try {
+
+    const result = await PlayerWarehouse.findOneAndUpdate(
+      { 
+        "gameID": gameID,
+        "branches.branch": branchName,
+        "branches.templates.statistics.templateID": templateID
+      },
+      {
+        $set: {
+          "branches.$[branch].templates.statistics.$[template].templateName": templateObject.templateName,
+          "branches.$[branch].templates.statistics.$[template].templateCodeName": templateObject.templateCodeName,
+          "branches.$[branch].templates.statistics.$[template].templateDefaultValue": templateObject.templateDefaultValue,
+          "branches.$[branch].templates.statistics.$[template].templateValueRangeMin": templateObject.templateValueRangeMin,
+          "branches.$[branch].templates.statistics.$[template].templateValueRangeMax": templateObject.templateValueRangeMax,
+        },
+      },
+      {
+        arrayFilters: [
+          { "branch.templates.statistics.templateID": templateID },
+          { "template.templateID": templateID },
+        ],
+        new: true,
+      }
+    );
+
+    res.status(200).json({ success: true, message: 'Statistics template edited successfully' });
+
+  } catch (error) {
+    console.error('Error editing statistics template:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+    
 app.post('/api/getWarehouseTemplates', async (req, res) => {
   const { gameID, branchName } = req.body;
 
@@ -9258,7 +9407,7 @@ async function generateRandomPWPlayers() {
 
     console.log('Generated PW players')
 }
-generateRandomPWPlayers()
+// generateRandomPWPlayers()
 
 app.post('/api/analytics/getProfileComposition', async (req, res) => {
   const {
