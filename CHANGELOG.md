@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.9.0
+2024-05-07
+
+### Features
+
+- new apis for positioned offers (4fe3aa92d096760848bca42c3c3055e436e0edfd)
+
 ## 1.8.0
 2024-05-04
 
