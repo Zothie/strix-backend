@@ -42,6 +42,7 @@ const mongoose = require('mongoose');
       required: true,
     },
     offers: [offerSchema],
+    positions: String,
   });
   
   const resultSchema = new mongoose.Schema({

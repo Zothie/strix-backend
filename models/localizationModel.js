@@ -17,6 +17,7 @@ const mongoose = require('mongoose');
       required: true
     },
     key: String,
+    inheritedFrom: String,
     translations: [translationSchema],
   });
   

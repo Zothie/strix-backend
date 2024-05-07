@@ -79,13 +79,14 @@ app.use(bodyParser.json());
 const whitelist = `${process.env.CORS_WHITELIST}`.split(',');
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || whitelist.includes(origin)) {
-      callback(null, true);
-    } else if (origin.match(/https?:\/\/localhost:?[0-9]*$/)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    callback(null, true);
+    // if (!origin || whitelist.includes(origin)) {
+    //   callback(null, true);
+    // } else if (origin.match(/https?:\/\/localhost:?[0-9]*$/)) {
+    //   callback(null, true);
+    // } else {
+    //   callback(new Error('Not allowed by CORS'));
+    // }
   },
   credentials: true,
 };
@@ -2887,6 +2888,133 @@ async function resolveEntityObjAfterMoving(gameID, branch, node, newParentID) {
   }
   resolveChildren()
 
+  async function resolveLocalizationItems() {
+
+    // Get the new updated tree
+    let newTree = await getTree()
+    newTree = newTree.nodes
+
+    // Get the current node we just moved
+    const targetNode = findNodeById(newTree.subnodes, node._id)
+
+    async function resolveExitedItems(nodeID) {
+      let localizationItems = await Localization.aggregate([
+        { $match: { gameID } }, 
+        { $unwind: "$branches" }, 
+        { $match: { "branches.branch": branch } }, 
+        { $unwind: "$branches.localization" }, 
+        { $unwind: `$branches.localization.entities` },
+        { 
+          $match: { 
+              [`branches.localization.entities.sid`]: { 
+                  $regex: new RegExp(`^.*\\|${nodeID}$`)
+              } 
+          } 
+        },
+        { $replaceRoot: { newRoot: `$branches.localization.entities` } }
+      ]);
+
+      if (localizationItems && localizationItems.length > 0) {
+        for (const item of localizationItems) {
+  
+          if (item.inheritedFrom) {
+            // We want to get the category node that we inherit localized item from
+            const parentCategory = findNodeByNodeID(newTree.subnodes, item.inheritedFrom)
+            // Then we want to check if the target node is a child of the parent node
+            // This way we know if it is moved from the parent node. If so, we need to remove outdated localization items
+            if (parentCategory) {
+              const targetNodeAsChild = findNodeByNodeID(parentCategory.subnodes, nodeID)
+              if (!targetNodeAsChild) {
+                // Remove all localization items that are inherited from the parent category
+                // and "sid" contains this nodeID
+                const result = await Localization.updateMany(
+                  { 
+                    gameID, 
+                    'branches.branch': branch,
+                    'branches.localization.entities.sid': new RegExp(`^.*\\|${nodeID}$`),
+                    'branches.localization.entities.inheritedFrom': item.inheritedFrom
+                  },
+                  { 
+                    $pull: { 
+                      'branches.$[branch].localization.entities': { 
+                        $and: [
+                          { sid: new RegExp(`^.*\\|${nodeID}$`) },
+                          { inheritedFrom: item.inheritedFrom }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    arrayFilters: [
+                      { 'branch.branch': branch },
+                      { 'localization.entities.inheritedFrom': item.inheritedFrom }
+                    ],
+                    new: true,
+                    multi: true
+                  }
+                ).exec();
+              }
+            }
+          }
+        }
+      }
+
+    }
+    resolveExitedItems(targetNode.nodeID)
+
+    async function resolveJoinedItems(nodeID) {
+      let localizationItems = await Localization.aggregate([
+        { $match: { gameID } }, 
+        { $unwind: "$branches" }, 
+        { $match: { "branches.branch": branch } }, 
+        { $unwind: "$branches.localization" }, 
+        { $unwind: `$branches.localization.entities` },
+        { 
+          $match: { 
+              [`branches.localization.entities.inheritedFrom`]: { 
+                  $exists: false
+              } 
+          } 
+        },
+        { $replaceRoot: { newRoot: `$branches.localization.entities` } }
+      ]);
+      
+      if (localizationItems && localizationItems.length > 0) {
+        for (const item of localizationItems) {
+  
+          const categoryNodeID = item.sid.split('|')[1]
+          const parentCategory = findNodeByNodeID(newTree.subnodes, categoryNodeID)
+          const targetNodeAsChild = findNodeByNodeID(parentCategory.subnodes, nodeID)
+
+          if (targetNodeAsChild) {
+            let tempItem = item
+            tempItem.sid = tempItem.sid.split('|')[0] + '|' + nodeID;
+            tempItem.inheritedFrom = categoryNodeID
+            
+            await insertLocalizationItem(gameID, branch, 'entities', tempItem);
+          }
+
+        }
+      }
+
+    }
+    resolveJoinedItems(targetNode.nodeID)
+
+
+    function recursivelyResolveItems(node) {
+      if (node.subnodes) {
+        for (const subnode of node.subnodes) {
+          resolveJoinedItems(subnode.nodeID)
+          resolveExitedItems(subnode.nodeID)
+          recursivelyResolveItems(subnode)
+        }
+      }
+    }
+    recursivelyResolveItems(targetNode)
+  }
+  resolveLocalizationItems()
+
+
   return
 }
 
@@ -3275,8 +3403,66 @@ app.post('/api/saveEntityInheritedConfigs', async (req, res) => {
   }
 });
 
+async function makeLocalizationForCategoryChildren(gameID, branch, categoryNodeID, translationObjects) {
+  try {
+
+    let planningTree = await PlanningTreeModel.findOne({ gameID });
+    if (!planningTree) {
+      return { success: false, message: 'PlanningTree not found' };
+    }
+    planningTree = planningTree.branches.find(b => b.branch === branch);
+    planningTree = planningTree.planningTypes.find(pt => pt.type === 'entity');
+
+    const categoryNode = findNodeByNodeID(planningTree.nodes, categoryNodeID)
+    if (!categoryNode) {
+      return { success: false, message: 'Category node not found' };
+    }
+
+    async function recursivelyMakeItems(node) {
+      if (node.subnodes) {
+        for (const subnode of node.subnodes) {
+          let modifiedObjects = translationObjects.map(obj => {
+            obj.sid = obj.sid.split('|')[0] + '|' + subnode.nodeID;
+            return obj;
+          });
+          await updateLocalization(gameID, branch, 'entities', modifiedObjects, categoryNode.nodeID);
+          await recursivelyMakeItems(subnode)
+        }
+      }
+    }
+    recursivelyMakeItems(categoryNode)
+
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 // Localization
-async function updateLocalization(gameID, branch, type, translationObjects) {
+async function insertLocalizationItem(gameID, branch, type, translationObject) {
+  try {
+    const result = await Localization.findOneAndUpdate(
+      { 
+        gameID, 
+        'branches.branch': branch 
+      },
+      { 
+        $push: {
+          [`branches.$[branch].localization.${type}`]: translationObject
+        }
+      },
+      {
+        arrayFilters: [
+          { 'branch.branch': branch },
+        ],
+        upsert: true,
+        new: true
+      }
+    ).exec();
+  } catch (error) {
+    console.error(error);
+  }
+}
+async function updateLocalization(gameID, branch, type, translationObjects, categoryNodeID) {
 
   let fieldToUpdate;
   switch (type) {
@@ -3325,7 +3511,22 @@ async function updateLocalization(gameID, branch, type, translationObjects) {
       localizations[index].translations = values
       localizations[index].key = key
     } else {
-      localizations.push({ sid: sid, key: key, translations: values })
+
+      // If we're creating inherited localization item, we need to also tell which node it was inherited from
+      if (categoryNodeID) {
+        localizations.push({ sid: sid, key: key, translations: values, inheritedFrom: categoryNodeID })
+      } else {
+        localizations.push({ sid: sid, key: key, translations: values })
+      }
+      
+      if (type === 'entities') {
+        makeLocalizationForCategoryChildren(
+          gameID, 
+          branch, 
+          translation.sid.split('|')[1],
+          translationObjects
+        )
+      }
     }
   });
   
@@ -3335,7 +3536,7 @@ async function updateLocalization(gameID, branch, type, translationObjects) {
     { 'gameID': gameID }, 
     { 'branch.branch': branch }
   ]
-  const result = await Localization.updateMany(filter, 
+  await Localization.updateMany(filter, 
     { 
       $set: {[`${fieldToUpdate}`]: localizations}
     }, 
@@ -3358,20 +3559,7 @@ app.post('/api/getLocalization', async (req, res) => {
   const { gameID, branch, type } = req.body;
 
   try {
-    let fieldToUpdate;
-    switch (type) {
-      case 'offers':
-        fieldToUpdate = `branches.$[branch].localization.offers`;
-        break;
-      case 'entities':
-        fieldToUpdate = `branches.$[branch].localization.entities`;
-        break;
-      case 'custom':
-        fieldToUpdate = `branches.$[branch].localization.custom`;
-        break;
-      default:
-        return res.status(400).json({ error: 'Invalid localization type' });
-    }
+
     async function getLocalizationDocument(type) {
       let array = []
       array = await Localization.aggregate([
@@ -3446,7 +3634,7 @@ app.post('/api/removeLocalizationItem', async (req, res) => {
       { 
         $pull: { 
           [`branches.$[branch].localization.${type}`]: { 
-            sid: sid 
+            sid: { $regex: new RegExp(`^${sid}\\|`) }
           }
         }
       },
@@ -3464,6 +3652,7 @@ app.post('/api/removeLocalizationItem', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 })
+
 app.post('/api/changeLocalizationItemKey', async (req, res) => {
   const { gameID, branch, type, sid, newKey } = req.body;
 
@@ -3742,7 +3931,54 @@ app.post('/api/getOffersByContentNodeID', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 })
+app.post('/api/getPositionedOffers', async (req, res) => {
+  const { gameID, branch } = req.body;
 
+  try {
+    let pos = await Offers.aggregate([
+        { $match: { gameID } }, 
+        { $unwind: "$branches" }, 
+        { $match: { "branches.branch": branch } }, 
+    ]);
+    pos = pos[0].branches.positions
+
+    if (!pos || pos === '') {
+      return res.status(404).json({ success: false, message: 'Data not found' });
+    }
+
+    let parsed = JSON.parse(pos);
+
+    res.status(200).json({ success: true, positions: parsed });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
+app.post('/api/setPositionedOffers', async (req, res) => {
+  const { gameID, branch, positions } = req.body;
+
+  try {
+    const result = await Offers.findOneAndUpdate(
+      { 
+        gameID, 
+        'branches.branch': branch 
+      },
+      {
+        $set: { "branches.$.positions": positions },
+      },
+      {
+        new: true,
+        upsert: true
+      }
+    ).exec();
+    
+
+    res.status(200).json({ success: true, message: 'Positions set successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
 app.post('/api/getGameplayRelations', async (req, res) => {
   try {
       const { gameID, branchName } = req.body;
@@ -3837,6 +4073,21 @@ function getGameplayRelations(gameplayNodes, relationsData) {
   });
 
   return Array.from(relationsMap.values());
+}
+
+
+// Вспомогательная функция для поиска ноды по nodeID
+function findNodeByNodeID(nodes, nodeID) {
+  for (const node of nodes) {
+    if (node.nodeID.toString() === nodeID) {
+      return node;
+    }
+    const subnodeResult = findNodeByNodeID(node.subnodes, nodeID);
+    if (subnodeResult) {
+      return subnodeResult;
+    }
+  }
+  return null;
 }
 
 // Вспомогательная функция для поиска ноды по _id
@@ -10993,34 +11244,36 @@ app.post('/api/updateCustomDashboard', async (req, res) => {
 })
 
 app.post('/api/testFunc', async (req, res) => {
-  const {gameID, branchName} = req.body
+  const {gameID, branchName, type, payload} = req.body
+
+  function handleEconomyEvent(payload) {
+    const {currencyID, amount, type, origin} = payload
+    // Function
+  }
+  function handleInappEvent(payload) {
+    const {offerID, price, amount} = payload
+    // Function
+  }
+
+  switch (type) {
+    case 'economyEvent':
+      handleEconomyEvent(payload)
+      break;
+    case 'inappEvent':
+      handleInappEvent(payload)
+      break;
+  }
+
 
   res.status(200).json({success: true, message: req.body})
 
-
-  // const templateID = '657a3a59e70105297e4d70dc'
-
-  // let playerWarehouse = await PlayerWarehouse.findOne({
-  //   gameID,
-  //   'branches.branch': branchName,
-  //   'branches.templates.analytics.templateID': templateID
-  // });
-
-  // const template = playerWarehouse.branches[0].templates.analytics.find((template) => template.templateID === templateID)
-
-  // const response = await calculateInitialElementValue(gameID, branchName, template)
-  // const mostCOmmon = await druidLib.getMostCommonValue(gameID, branchName, 'abobaClientID', 'designEvent', 'someEventID', 'value1')
-  // playerWarehouseLib.setElementValues(gameID, branchName, 'abobaClientID', template.templateID, mostCOmmon)
-
-  // const endDate = moment()
-  // const startDate = moment().subtract(1, 'days')
-
-  // console.log('Date diff:', endDate.diff(startDate, 'days'))
-
-  // const response = await druidLib.getNewUsers(gameID, branchName, startDate, endDate)
-
-  // res.status(200).json({success: true, message: response})
 });
+
+
+
+
+
+
 
 app.get('/api/health', async (req, res, next) => {
   res.json({health: 'OK.', message: `Current Version is ${process.env.CURRENT_VERSION}`});

@@ -1450,7 +1450,8 @@ app.post('/api/sdk/analytics/designEvent', async (req, res) => {
 
   checkForTemplatesByDesignEvent(gameID, branchName, foundEvent, clientID, sanitizedValue1, sanitizedValue2, sanitizedValue3)
 
-  const rerouteData = {gameID, eventType, eventID, sessionID, clientID, country, language, platform, gameVersion, engineVersion, buildType, value1: sanitizedValue1, value2: sanitizedValue2, value3: sanitizedValue3}
+  const rerouteData = {gameID, eventType, eventID, sessionID, clientID, country, language, platform, gameVersion, engineVersion, buildType, 
+    value1: sanitizedValue1, value2: sanitizedValue2, value3: sanitizedValue3}
 
   sendKafkaMessage('designevents', rerouteData)
 
