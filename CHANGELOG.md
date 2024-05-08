@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.9.1
+2024-05-08
+
+### Fixes
+
+- analytics event values new _id generation fix (f29d45386f4d8cda976b9b90a8c51e40d1904066)
+
 ## 1.9.0
 2024-05-07
 
