@@ -4562,10 +4562,11 @@ app.post('/api/updateAnalyticsEvent', async (req, res) => {
     }
 
     let tempObj = eventObject;
-    tempObj.values = tempObj.values.map(value => {
-      value._id = mongoose.Types.ObjectId(value._id);
-      return value;
-    });
+    // tempObj.values = tempObj.values.map(value => {
+    //   console.log('value', value)
+    //   value._id = value._id;
+    //   return value;
+    // });
 
     // Найти и обновить ивент в коллекции AnalyticsEvents
     const updatedAnalyticsEvent = await AnalyticsEvents.findOneAndUpdate(
