@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.10.0
+2024-05-11
+
+### Features
+
+- new db adress, profile composition and segments update (d1300bdb82d7e5e2a76071b5625a5c5e634473eb)
+
 ## 1.9.1
 2024-05-08
 
