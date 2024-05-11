@@ -67,6 +67,9 @@ const templatesAnalytics = new mongoose.Schema({
     templateConditions: [conditionSchema],
     templateAnalyticEventID: String,
     templateEventTargetValueId: String,
+
+    // Only for default templates
+    templateDefaultVariantType: String,
 })
 const templatesSchema = new mongoose.Schema({
     analytics: [templatesAnalytics],

@@ -88,7 +88,7 @@ const corsOptions = {
     //   callback(new Error('Not allowed by CORS'));
     // }
   },
-  credentials: true,
+  credentials: false,
 };
 app.use(cors(corsOptions));
 
@@ -579,7 +579,49 @@ app.post('/api/createGame', async (req, res) => {
       branches: [
         {
           branch: 'development',
-          templates: {},
+          templates: {
+            analytics: [
+              {
+                templateID: 'lastReturnDate',
+                templateName: 'Last Return Date',
+              },
+              {
+                templateID: 'lastPaymentDate',
+                templateName: 'Last Payment Date',
+              },
+              {
+                templateID: 'totalPaymentsSumm',
+                templateName: 'Total Payments Summ',
+              },
+              {
+                templateID: 'totalPaymentsCount',
+                templateName: 'Total Payments Count',
+              },
+              {
+                templateID: 'country',
+                templateName: 'Country',
+              },
+              {
+                templateID: 'engineVersion',
+                templateName: 'Engine Version',
+              },
+              {
+                templateID: 'gameVersion',
+                templateName: 'Game Version',
+              },
+              {
+                templateID: 'language',
+                templateName: 'Language',
+              },
+              {
+                templateID: 'meanSessionLength',
+                templateName: 'Mean. Session Length',
+              },
+            ],
+            statistics: [
+
+            ]
+          },
           players: []
         },
         {
@@ -2611,6 +2653,8 @@ async function moveNodeInPlanningTree( gameID, branchName, planningType, nodeToM
     // res.status(500).json({ message: 'Internal Server Error' });
   }
 }
+
+
 async function removeNodeInheritance(gameID, branch, nodeID, isCategory) {
 
 console.log('Removing node inheritance for gameID:', 
@@ -5082,12 +5126,11 @@ app.post('/api/setSegmentConditions', async (req, res) => {
           return res.status(404).json({ message: 'Segment not found' });
       }
 
-      // Обновление segmentConditions в найденном сегменте
       const updatedBranches = segment.branches.map(branch => {
           if (branch.branch === branchName) {
               const updatedSegments = branch.segments.map(segment => {
                   if (segment.segmentID === segmentID) {
-                      segment.segmentConditions = segmentConditions;
+                      segment.segmentConditions = JSON.stringify(segmentConditions);
                   }
                   return segment;
               });
@@ -5097,7 +5140,6 @@ app.post('/api/setSegmentConditions', async (req, res) => {
           return branch;
       });
 
-      // Сохранение обновленного документа
       await Segments.updateOne(
           { 'gameID': gameID, 'branches.branch': branchName },
           { $set: { 'branches': updatedBranches } }
@@ -9657,9 +9699,24 @@ async function generateRandomPWPlayers() {
       })
     }
 
-    console.log('Generated PW players')
+    // console.log('Generated PW players')
 }
 // generateRandomPWPlayers()
+
+let cachedWarehousePlayers = []
+async function cachePlayers(gameID, branchName) {
+  const playerWarehouse = await PlayerWarehouse.findOne({ gameID, 'branches.branch': branchName }).lean();
+  if (!playerWarehouse) {
+    return
+  }
+  const players = playerWarehouse.branches.find(b => b.branch === branchName).players
+  cachedWarehousePlayers = players.map(player => ({
+    ...player,
+    elements: [].concat(player.elements.analytics).concat(player.elements.statistics)
+  }))
+  console.log('Cached players')
+}
+cachePlayers('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
 
 app.post('/api/analytics/getProfileComposition', async (req, res) => {
   const {
@@ -9675,83 +9732,72 @@ app.post('/api/analytics/getProfileComposition', async (req, res) => {
 
   try {
 
-    const composition = generatedPWPlayers.filter(p => getComposition(p))
-
+    const composition = cachedWarehousePlayers.filter(p => getComposition(p))
 
     function getComposition(player) {
-
       if (!player.segments.includes(baseSegment)) return false
+
+      if (filters.length === 0) return true
+
+
+      let evalString = ''
       for (const filter of filters) {
 
-        let targetElement = player.elements
-                            .find(element => element.elementID === filter.templateID)
-
-        if (!targetElement) {
-          return false
+        if (filter.condition) {
+          evalString += filter.condition === 'and' ? '*' : '+'
         } else {
-          switch (filter.filterCondition) {
-            case 'is':
-              if (targetElement.elementValue !== filter.filterValue) {
-                return false
-              }
-              break;
-            case 'is not':
-              if (targetElement.elementValue === filter.filterValue) {
-                return false
-              }
-              break;
-            case 'contains':
-              if (!targetElement.elementValue.includes(filter.filterValue)) {
-                return false
-              }
-              break;
-            case 'starts with':
-              if (!targetElement.elementValue.startsWith(filter.filterValue)) {
-                return false
-              }
-              break;
-            case 'ends with':
-              if (!targetElement.elementValue.endsWith(filter.filterValue)) {
-                return false
-              }
-              break;
-            case '>':
-              if (targetElement.elementValue <= filter.filterValue) {
-                return false
-              }
-              break;
-            case '<':
-              if (targetElement.elementValue >= filter.filterValue) {
-                return false
-              }
-              break;
-            case '>=':
-              if (targetElement.elementValue < filter.filterValue) {
-                return false
-              }
-              break;
-            case '<=':
-              if (targetElement.elementValue > filter.filterValue) {
-                return false
-              }
-              break;
-            default:
-              return false
+          let targetElement = player.elements
+                              .find(element => element.elementID === filter.templateID)
+  
+          if (!targetElement) {
+            return false
+          } else {
+            switch (filter.filterCondition) {
+              case 'is':
+                evalString += Number(targetElement.elementValue === filter.filterValue)
+                break;
+              case 'is not':
+                evalString += Number(targetElement.elementValue !== filter.filterValue)
+                break;
+              case 'contains':
+                evalString += Number(targetElement.elementValue.includes(filter.filterValue))
+                break;
+              case 'starts with':
+                evalString += Number(targetElement.elementValue.startsWith(filter.filterValue))
+                break;
+              case 'ends with':
+                evalString += Number(targetElement.elementValue.endsWith(filter.filterValue))
+                break;
+              case '>':
+                evalString += Number(targetElement.elementValue > filter.filterValue)
+                break;
+              case '<':
+                evalString += Number(targetElement.elementValue < filter.filterValue)
+                break;
+              case '>=':
+                evalString += Number(targetElement.elementValue >= filter.filterValue)
+                break;
+              case '<=':
+                evalString += Number(targetElement.elementValue <= filter.filterValue)
+                break;
+              case 'dateRange':
+                const startDate = new Date(filter.filterValue[0]);
+                const endDate = new Date(filter.filterValue[1]);
+                const targetDate = new Date(targetElement.elementValue);
+                const isWithinRange = targetDate >= startDate && targetDate <= endDate;
+                evalString += Number(isWithinRange)
+                break;
+              default:
+                evalString += '0'
+                break;
+            }
           }
         }
-      }
-      return true
-    }
 
-  function getElementValue(player, elementID) {
-    let targetValue = player.elements
-        .find(element => element.elementID === elementID)
-    if (!targetValue) {
-      return 0;
-    } else {
-      return targetValue.elementValue;
+      }
+      const result = eval(evalString)
+      return result
     }
-  }
 
   function getRandomSample(players, confidenceLevel) {
     const n = players.length;
@@ -9762,40 +9808,19 @@ app.post('/api/analytics/getProfileComposition', async (req, res) => {
 
     const z = confidenceLevel === 0.95 ? 1.96 : 2.58;
 
-    const sampleSize = Math.ceil(Math.pow((z * Math.sqrt(expectedProportion * (1 - expectedProportion))) / marginOfError, 2));
-    // console.log('Sample size:', sampleSize);
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    let sampleSize = Math.ceil(Math.pow((z * Math.sqrt(expectedProportion * (1 - expectedProportion))) / marginOfError, 2));
+    sampleSize = clamp(sampleSize, 1, n);
 
     const sample = [];
     for (let i = 0; i < sampleSize; i++) {
         const randomIndex = Math.floor(Math.random() * n);
         sample.push(players[randomIndex]);
     }
-  
     return sample;
-  }
-  
-  function pickElement(player, targetElementID, axis) {
-    // if (player.elements !== null) {
-    //   player.flattenedElements = player.elements.statistics.concat(player.elements.analytics)
-    //   player.elements = null;
-    // }
-
-    let foundElementValue = player.elements
-                            .find(element => element.elementID === targetElementID)
-    if (!foundElementValue) {
-      player[axis] = 0;
-      return 0;
-    } else {
-      player[axis] = foundElementValue.elementValue;
-      return foundElementValue.elementValue
-    }
-  }
-  function calculateWeight(player) {
-    let tempElement1 = pickElement(player, element1, 'x');
-    let tempElement2 = pickElement(player, element2, 'y');
-    let tempElement3 = pickElement(player, element3, 'r');
-
-    return tempElement1 + tempElement2 + tempElement3;
   }
 
   let sample = [];
@@ -9821,9 +9846,13 @@ app.post('/api/getProfileCompositionPreset', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Charts not found' })
     }
     let branch = charts.branches.find(b => b.branch === branchName)
-    branch.profileCompositionPresets = JSON.parse(branch.profileCompositionPresets)
+    if (branch.profileCompositionPresets !== undefined && branch.profileCompositionPresets !== '') {
+      branch.profileCompositionPresets = JSON.parse(branch.profileCompositionPresets)
+      res.status(200).json({ success: true, message: { presets: branch.profileCompositionPresets } })
+    } else {
+      res.status(200).json({ success: true, message: { presets: [] } })
+    }
 
-    res.status(200).json({ success: true, message: { presets: branch.profileCompositionPresets } })
   } catch (error) {
     console.log(error)
     res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
@@ -11271,9 +11300,413 @@ app.post('/api/testFunc', async (req, res) => {
 });
 
 
+async function populatePlayerWarehouse(gameID, branchName) {
+
+  const playerWarehouse = await PlayerWarehouse.findOne({ 
+    gameID: gameID, 
+    'branches.branch': branchName 
+  })
+
+  function getRandomDateInRange(startDate, endDate) {
+    const startTimestamp = startDate.getTime();
+    const endTimestamp = endDate.getTime();
+    const randomTimestamp = startTimestamp + Math.random() * (endTimestamp - startTimestamp);
+    return new Date(randomTimestamp).toISOString();
+  }
+
+  const Aelements = [
+    // Default elements
+    'lastReturnDate', 
+    'lastPaymentDate', 
+    'totalPaymentsCount', 
+    'totalPaymentsSumm', 
+    'country',
+    'language',
+    'platform',
+    'meanSessionLength',
+    'engineVersion',
+    'gameVersion',
+  ]
+  const Selements = [
+    // bool
+    '663b55700b77992003716823'
+  ]
+  let segmentCounts = {}
+
+  playerWarehouse.branches.find(b => b.branch === branchName).players = []
+  for (let i = 0; i < 1000; i++) {
+    playerWarehouse.branches.find(b => b.branch === branchName).players.push({
+      clientID: uuid.v4(),
+      elements: {
+        analytics: [],
+      },
+      inventory: [],
+      goods: [],
+      abtests: [],
+      segments: [],
+    })
+  }
+  playerWarehouse.branches.find(b => b.branch === branchName).players.forEach((player, index) => {
 
 
+    let global_lrd
+    let global_tpc
 
+    player.elements.analytics = Aelements.map(element => {
+      let tempVal
+      switch (element) {
+
+        case 'lastReturnDate':
+          if (randomNumberInRange(1, 100) < 95) {
+            tempVal = getRandomDateInRange(new Date(), new Date(Date.now() - 1000 * 60 * 60 * 24 * 25))
+          } else {
+            tempVal = getRandomDateInRange(new Date(), new Date(Date.now() - 1000 * 60 * 60 * 24 * 30))
+          }
+          global_lrd = new Date(tempVal)
+          break;
+
+
+        case 'lastPaymentDate':
+          if (randomNumberInRange(1, 100) < 80) {
+            tempVal = getRandomDateInRange(global_lrd, new Date(global_lrd - 1000 * 60 * 60 * 24 * 15))
+          } else {
+            tempVal = getRandomDateInRange(global_lrd, new Date(global_lrd - 1000 * 60 * 60 * 24 * 3))
+          }
+          break;
+
+
+        case 'totalPaymentsSumm':
+          tempVal = global_tpc*randomNumberInRange(0.1, 10, true)
+          break;
+
+
+        case 'totalPaymentsCount':
+          switch (randomNumberInRange(1, 5)) {
+            case 1: 
+              tempVal = randomNumberInRange(3, 5)
+              global_tpc = tempVal
+            break;
+            case 2: 
+              tempVal = randomNumberInRange(5, 7)
+              global_tpc = tempVal
+            break;
+            case 3: 
+              tempVal = randomNumberInRange(3, 9)
+              global_tpc = tempVal
+            break;
+            case 4: 
+              tempVal = randomNumberInRange(9, 15)
+              global_tpc = tempVal
+            break;
+            case 5: 
+              tempVal = randomNumberInRange(10, 20)
+              global_tpc = tempVal
+            break;
+          }
+          break;
+
+
+        case 'country':
+          function getRandomCountry() {
+            const countries = [
+              'United States',
+              'Canada',
+              'Mexico', 
+              'Brazil', 
+              'France', 
+              'Germany', 
+              'Spain', 
+              'Italy', 
+              'Japan', 
+              'China', 
+              'India', 
+              'Russia', 
+              'Australia', 
+              'South Korea', 
+              'Indonesia', 
+              'Thailand', 
+              'Vietnam', 
+              'Turkey', 
+              'Iran', 
+              'Egypt', 
+              'Argentina', 
+              'Colombia',
+            ]
+            return countries[randomNumberInRange(0, countries.length - 1)]
+          }
+          tempVal = getRandomCountry()
+          break;
+
+
+        case 'language':
+          function getRandomLanguage() {
+            const languages = [
+              'English',
+              'Spanish',
+              'French',
+              'German',
+              'Italian',
+              'Japanese',
+              'Chinese',
+              'Korean',
+              'Russian',
+              'Portuguese',
+              'Arabic',
+              'Hindi',
+            ]
+            return languages[randomNumberInRange(0, languages.length - 1)]
+          }
+          tempVal = getRandomLanguage()
+          break;
+
+
+        case 'platform':
+          function getRandomPlatform() {
+            const platforms = [
+              'Android 10',
+              'iOS 14',
+              'Windows 10',
+              'MacOS 11',
+              'Linux',
+            ]
+            return platforms[randomNumberInRange(0, platforms.length - 1)]
+          }
+          tempVal = getRandomPlatform()
+          break;
+
+
+        case 'meanSessionLength':
+          tempVal = randomNumberInRange(1000, 1800)
+          break;
+
+
+        case 'engineVersion':
+          function getRandomEngineVersion() {
+            const engines = [
+              'Unity 2021.3.9f1',
+              'Unity 2021.3.8f1',
+              'Unity 2021.3.7f1',
+              'Unity 2021.3.6f1',
+              'Unreal Engine 5.1',
+              'Unreal Engine 5.0',
+              'Unreal Engine 4.27',
+            ]
+            return engines[randomNumberInRange(0, engines.length - 1)]
+          }
+          tempVal = getRandomEngineVersion()
+          break;
+
+
+        case 'gameVersion':
+          function getRandomGameVersion() {
+            const versions = [
+              '1.9.1',
+              '1.9.0',
+              '1.8.0',
+              '1.7.0',
+            ]
+            return versions[randomNumberInRange(0, versions.length - 1)]
+          }
+          tempVal = getRandomGameVersion()
+          break;
+
+
+      }
+
+      return {
+        elementID: element,
+        elementValue: tempVal
+      }
+    })
+
+    player.elements.statistics = Selements.map(element => {
+      let tempVal
+      switch (element) {
+        case '663b55700b77992003716823':
+          switch (randomNumberInRange(0, 1)) {
+            case 1: 
+              tempVal = 'True'
+            break;
+            case 0: 
+              tempVal = 'False'
+            break;
+          }
+          break;
+      }
+
+      return {
+        elementID: element,
+        elementValue: tempVal
+      }
+    })
+
+
+    const possibleSegments = ['everyone', '6635ed2abd20c2e1a4f238a6', '6635ed30bd20c2e1a4f23932']
+    player.segments.push(possibleSegments[0])
+    switch (randomNumberInRange(1, 5)) {
+      case 1:
+        player.segments.push(possibleSegments[1])
+        break;
+      default:
+        break;
+    }
+    switch (randomNumberInRange(1, 5)) {
+      case 1:
+      case 2:
+      case 3:
+        player.segments.push(possibleSegments[2])
+        break;
+      default:
+        break;
+    }
+
+    player.segments.forEach(segment => {
+      if (!segmentCounts[segment]) {
+        segmentCounts[segment] = 0
+      }
+      segmentCounts[segment]++
+    })
+  })
+
+  const segments = await Segments.findOne({ gameID, 'branches.branch': branchName })
+  const branch = segments.branches.find(b => b.branch === branchName)
+  branch.segments.forEach(segment => {
+    segment.segmentPlayerCount = segmentCounts[segment.segmentID]
+  })
+  console.log('Populated segments, saving')
+  await segments.save()
+
+  
+  console.log('Populated player warehouse, saving')
+  // playerWarehouse.branches.find(b => b.branch === branchName).players = players
+  await playerWarehouse.save()
+
+  console.log('Populated database')
+
+}
+// populatePlayerWarehouse('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
+
+
+async function populateElements(gameID, branchName) {
+  const playerWarehouse = await PlayerWarehouse.findOneAndUpdate(
+    { gameID: gameID, 'branches.branch': branchName },
+    { $push: { 'branches.$.templates.analytics': {
+
+      templateID: 'lastReturnDate',
+      templateName: 'Last Return Date',
+      templateDefaultVariantType: 'date'
+    } } },
+    {
+      new: true
+    }
+  )
+  const playerWarehouse2 = await PlayerWarehouse.findOneAndUpdate(
+    { gameID: gameID, 'branches.branch': branchName },
+    { $push: { 'branches.$.templates.analytics': 
+    {
+      templateID: 'lastPaymentDate',
+      templateName: 'Last Payment Date',
+      templateDefaultVariantType: 'date'
+    }
+    } },
+    {
+      new: true
+    }
+  )
+  const playerWarehouse3 = await PlayerWarehouse.findOneAndUpdate(
+    { gameID: gameID, 'branches.branch': branchName },
+    { $push: { 'branches.$.templates.analytics': 
+    {
+      templateID: 'totalPaymentsSumm',
+      templateName: 'Total Payments Summ',
+      templateDefaultVariantType: 'float'
+    }
+    } },
+    {
+      new: true
+    }
+  )
+  const playerWarehouse4 = await PlayerWarehouse.findOneAndUpdate(
+    { gameID: gameID, 'branches.branch': branchName },
+    { $push: { 'branches.$.templates.analytics': 
+    {
+      templateID: 'totalPaymentsCount',
+      templateName: 'Total Payments Count',
+      templateDefaultVariantType: 'integer'
+    }
+    } },
+    {
+      new: true
+    }
+  )
+  const playerWarehouse5 = await PlayerWarehouse.findOneAndUpdate(
+    { gameID: gameID, 'branches.branch': branchName },
+    { $push: { 'branches.$.templates.analytics': 
+    {
+      templateID: 'country',
+      templateName: 'Country',
+      templateDefaultVariantType: 'string'
+    }
+    } },
+    {
+      new: true
+    }
+  )
+  const playerWarehouse6 = await PlayerWarehouse.findOneAndUpdate(
+    { gameID: gameID, 'branches.branch': branchName },
+    { $push: { 'branches.$.templates.analytics': 
+    {
+      templateID: 'engineVersion',
+      templateName: 'Engine Version',
+      templateDefaultVariantType: 'string'
+    }
+    } },
+    {
+      new: true
+    }
+  )
+  const playerWarehouse7 = await PlayerWarehouse.findOneAndUpdate(
+    { gameID: gameID, 'branches.branch': branchName },
+    { $push: { 'branches.$.templates.analytics': 
+    {
+      templateID: 'gameVersion',
+      templateName: 'Game Version',
+      templateDefaultVariantType: 'string'
+    }
+    } },
+    {
+      new: true
+    }
+  )
+  const playerWarehouse8 = await PlayerWarehouse.findOneAndUpdate(
+    { gameID: gameID, 'branches.branch': branchName },
+    { $push: { 'branches.$.templates.analytics': 
+    {
+      templateID: 'language',
+      templateName: 'Language',
+      templateDefaultVariantType: 'string'
+    }
+    } },
+    {
+      new: true
+    }
+  )
+  const playerWarehouse9 = await PlayerWarehouse.findOneAndUpdate(
+    { gameID: gameID, 'branches.branch': branchName },
+    { $push: { 'branches.$.templates.analytics': 
+    {
+      templateID: 'meanSessionLength',
+      templateName: 'Mean. Session Length',
+      templateDefaultVariantType: 'integer'
+    } 
+    } },
+    {
+      new: true
+    }
+  )
+
+}
+// populateElements('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
 
 
 app.get('/api/health', async (req, res, next) => {

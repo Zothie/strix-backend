@@ -1,12 +1,5 @@
 const mongoose = require('mongoose');
 
-const segmentConditionSchema = new mongoose.Schema({
-  conditionElementID: String,
-  condition: String,
-  conditionValue: String,
-  conditionSecondaryValue: String,
-  conditionOperator: String,
-});
 
 const segmentSchema = new mongoose.Schema({
   segmentID: {
@@ -15,7 +8,7 @@ const segmentSchema = new mongoose.Schema({
   },
   segmentName: String,
   segmentComment: String,
-  segmentConditions: [segmentConditionSchema],
+  segmentConditions: String,
   segmentPlayerCount: Number,
   segmentPlayerIDs: [String]
 });
