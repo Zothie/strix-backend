@@ -11,6 +11,8 @@ const axios = require('axios');
 const moment = require('moment');
 const http = require('http');
 const dayjs = require('dayjs');
+const jStat = require('jstat');
+const abTestResults = require('ab-test-result')
 
 // const morgan = require('morgan');
 
@@ -38,6 +40,7 @@ const Relations = require('./models/relationsModel.js')
 const Localization = require('./models/localizationModel.js')
 const Offers = require('./models/offersModel.js')
 const CustomCharts = require('./models/charts.js')
+const ABTests = require('./models/abtests.js')
 
 
 const segmentsLib = require('./segmentsLib.cjs')
@@ -309,6 +312,13 @@ app.post('/api/finishInitialOnboarding', async (req, res) => {
               ...demoCustomCharts
             });
             await newCustomCharts.save();
+
+            const demoABTests = ABTests.findOne({ gameID: demoGameID });
+            const newABTests = new ABTests({
+              gameID: newGameID,
+              ...demoABTests
+            });
+            await newABTests.save();
       }
       // createDemoGame()
 
@@ -836,6 +846,25 @@ app.post('/api/createGame', async (req, res) => {
       ],
     });
     await newCustomCharts.save();
+
+    const newABTests = new ABTests({
+      gameID: newGameID,
+      branches: [
+        {
+          branch: 'development',
+          tests: [],
+        },
+        {
+          branch: 'stage',
+          tests: [],
+        },
+        {
+          branch: 'production',
+          tests: [],
+        },
+      ],
+    });
+    await newABTests.save();
 
 
     res.json({ success: true, gameID: newGameID });
@@ -5651,6 +5680,7 @@ app.post('/api/getAllAnalyticsEvents', async (req, res) => {
               categoryName: planningType.type,
               nodes: [{
                 nodeName: node.name,
+                nodeID: node.nodeID,
                 events: await Promise.all(node.analyticsEvents.map(async eventID => {
                   const event = await AnalyticsEvents.findOne({ 'branches.branch': branchName, 'gameID': gameID, 'branches.events.eventID': eventID });
 
@@ -7332,6 +7362,65 @@ async function generateRandomDataByDays(
 
 
     randomValue = parseFloat(randomValue.toFixed(toFixedAmount));
+
+    randomData.push({
+      [categoryFieldName]: currentDate.toISOString(),
+      [valueFieldName]: randomValue
+    });
+
+    lastGeneratedValue = randomValue;
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return randomData;
+}
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+async function generateRandomDataByDaysNonLinear(
+  startDate, 
+  endDate, 
+  minValue, 
+  maxValue,
+  trend, 
+  deviation, 
+  toFixedAmount = 2, 
+  categoryFieldName = 'timestamp', 
+  valueFieldName = 'value'
+  ) {
+  let currentDate = new Date(startDate);
+  let lastGeneratedValue = randomNumberInRange(minValue, maxValue);
+
+  let sinFrequencyMultiplier = 0.1
+  let randomData = [];
+  let iteration = 0;
+
+  let declineIterationPoint = randomNumberInRange(7, 17)
+  let stopIterationPoint = declineIterationPoint+randomNumberInRange(4, 10)
+
+  while (currentDate <= endDate) {
+    iteration += 1;
+    let currentDeviation = deviation;
+    let currentSinMultiplier = sinFrequencyMultiplier;
+
+    if (iteration > declineIterationPoint && iteration <= stopIterationPoint) {
+      currentDeviation *= (stopIterationPoint - iteration) / 3;
+      currentSinMultiplier *= (stopIterationPoint - iteration) / 3;
+    } else if (iteration > stopIterationPoint) {
+      currentSinMultiplier = 0;
+    }
+
+    let calcRandAdditiveTrend = clamp(randomNumberInRange(-currentDeviation, currentDeviation, true), 0, 1);
+    let trendFactor = Math.sin((iteration * calcRandAdditiveTrend) * currentSinMultiplier) + 1;
+
+    let randomValue
+    if (currentDeviation == 0 || currentSinMultiplier == 0) {
+      randomValue = lastGeneratedValue + (lastGeneratedValue * trend * calcRandAdditiveTrend);
+    } else {
+      randomValue = lastGeneratedValue + (lastGeneratedValue * trend * calcRandAdditiveTrend * trendFactor);
+    }
+    randomValue = parseFloat(Math.ceil(randomValue).toFixed(toFixedAmount));
 
     randomData.push({
       [categoryFieldName]: currentDate.toISOString(),
@@ -9716,7 +9805,7 @@ async function cachePlayers(gameID, branchName) {
   }))
   console.log('Cached players')
 }
-cachePlayers('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
+
 
 app.post('/api/analytics/getProfileComposition', async (req, res) => {
   const {
@@ -11119,6 +11208,90 @@ app.post('/api/analytics/getOverviewStatistics', async (req, res) => {
   }
 })
 
+app.post('/api/analytics/getRandomDataForABTest', async (req, res) => {
+  const {gameID, branchName, filterDate, testID} = req.body
+
+  const endDate = new Date(filterDate[1])
+  const startDate = new Date(filterDate[0])
+  startDate.setUTCHours(0, 0, 0, 0);
+  endDate.setUTCHours(23, 59, 59, 999);
+
+  let randStart_controlSamples = randomNumberInRange(1000, 10000)
+  const controlDeviation = randomNumberInRange(0.025, 0.040, true)
+  let randStart_control = parseInt(randStart_controlSamples*controlDeviation)
+
+  let randStart_testSamples = randomNumberInRange(100, 1000)
+  const testDeviation = controlDeviation + randomNumberInRange(-0.01, 0.01, true)
+  let randStart_test = parseInt(randStart_testSamples*testDeviation)
+
+  console.log('Generating control results', randStart_control)
+  let generatedData = await generateRandomDataByDaysNonLinear(
+    startDate, endDate, randStart_control, randStart_control, 0.2, 0.5, 0, 'timestamp', 'control')
+
+  console.log('Generating test results', randStart_test)
+  let generatedData_test = await generateRandomDataByDaysNonLinear(
+    startDate, endDate, randStart_test, randStart_test, 0.2, 0.5, 0, 'timestamp', 'test')
+
+  console.log('Generating control samples', randStart_controlSamples)
+  let generatedData_controlSamples = await generateRandomDataByDaysNonLinear(
+    startDate, endDate, randStart_controlSamples, randStart_controlSamples, 0.2, 0.5, 0, 'timestamp', 'controlSamples')
+
+  console.log('Generating test samples', randStart_testSamples)
+  let generatedData_testSamples = await generateRandomDataByDaysNonLinear(
+    startDate, endDate, randStart_testSamples, randStart_testSamples, 0.2, 0.5, 0, 'timestamp', 'testSamples')
+
+
+  generatedData = generatedData.map((item, index) => {
+    let tempItem = item
+    item.test = generatedData_test[index].test
+    item.controlSamples = generatedData_controlSamples[index].controlSamples
+    item.testSamples = generatedData_testSamples[index].testSamples
+    return tempItem
+  })
+
+  function calculatePValue(controlSuccesses, controlTrials, testSuccesses, testTrials) {
+    const p1 = controlSuccesses / controlTrials;
+    const p2 = testSuccesses / testTrials;
+    const p = (controlSuccesses + testSuccesses) / (controlTrials + testTrials);
+    const z = (p1 - p2) / Math.sqrt(p * (1 - p) * (1 / controlTrials + 1 / testTrials));
+    const pValue = 2 * (1 - jStat.normal.cdf(Math.abs(z), 0, 1));
+    return {pValue, zScore: z};
+  }
+
+  // Проходимся по массиву данных игроков и обновляем значения p-value
+  for (let i = 0; i < generatedData.length; i++) {
+    const currentDate = new Date(generatedData[i].timestamp);
+    const currentControl = generatedData[i].control;
+    const currentTest = generatedData[i].test;
+    const currentControlSamples = generatedData[i].controlSamples;
+    const currentTestSamples = generatedData[i].testSamples;
+
+    // Собираем данные за предыдущие дни
+    const prevDaysData = generatedData
+      .filter((item, index) => new Date(item.timestamp) < currentDate && index < i)
+      .map(item => ({ control: item.control, test: item.test }));
+
+    // Вычисляем p-value на основе данных за текущий и предыдущие дни
+    const res = calculatePValue(currentControl, currentControlSamples, currentTest, currentTestSamples);
+    // Обновляем значение p-value в элементе массива
+    generatedData[i].pvalue = res.pValue;
+    generatedData[i].zScore = res.zScore;
+  }
+
+  generatedData = generatedData.map((item, index) => {
+    let tempItem = item
+    item.control = item.control / item.controlSamples
+    item.test = item.test / item.testSamples
+    return tempItem
+  })
+
+  
+  
+  // console.log(generatedData)
+
+  res.status(200).json({success: true, message: {data: generatedData}})
+})
+
 
 app.post('/api/getDashboards', async (req, res) => {
   const {gameID, branch} = req.body
@@ -11272,6 +11445,147 @@ app.post('/api/updateCustomDashboard', async (req, res) => {
     res.status(500).json({success: false, message: 'Internal Server Error'})
   }
 })
+
+app.post('/api/getABTests', async (req, res) => {
+  const {gameID, branchName} = req.body
+
+  try {
+
+    const abTests = await ABTests.findOne({ gameID: gameID, 'branches.branch': branchName })
+      
+    if (!abTests) {
+      console.log('ABTests not found or branch does not exist');
+    }
+
+    const branchItem = abTests.branches.find(b => b.branch === branchName);
+    const result = branchItem.tests;
+
+    res.status(200).json({success: true, abTests: result})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error'})
+  }
+})
+app.post('/api/createABTest', async (req, res) => {
+  const {gameID, branchName, testObject} = req.body
+
+  try {
+
+    let formattedTestObject = testObject;
+    formattedTestObject.segments = JSON.stringify(formattedTestObject.segments)
+    formattedTestObject.observedMetric = JSON.stringify(formattedTestObject.observedMetric)
+    formattedTestObject.subject = JSON.stringify(formattedTestObject.subject)
+
+
+    const abTests = await ABTests.findOneAndUpdate(
+      { 'gameID': gameID, 'branches.branch': branchName },
+      { $push: { 'branches.$.tests': testObject } },
+      { new: true }
+    )
+
+    res.status(200).json({success: true})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error'})
+  }
+})
+app.post('/api/removeABTest', async (req, res) => {
+  const {gameID, branchName, testObject, archive, archiveResult} = req.body
+
+  try {
+
+    if (archive) {
+
+      let formattedTestObject = testObject;
+      formattedTestObject.segments = JSON.stringify(formattedTestObject.segments)
+      formattedTestObject.observedMetric = JSON.stringify(formattedTestObject.observedMetric)
+      formattedTestObject.subject = JSON.stringify(formattedTestObject.subject)
+      formattedTestObject.archived = true
+      formattedTestObject.archivedResult = archiveResult
+      formattedTestObject.codename = ''
+  
+  
+      const abTests = await ABTests.findOneAndUpdate(
+        { 'gameID': gameID, 'branches.branch': branchName },
+        { $set: { 'branches.$[outer].tests.$[inner]': formattedTestObject } },
+        {
+          arrayFilters: [
+            { 'outer.branch': branchName },
+            { 'inner.id': testObject.id },
+          ],
+        }
+      )
+    } else {
+      const abTests = await ABTests.findOneAndUpdate(
+        { 'gameID': gameID, 'branches.branch': branchName },
+        { $pull: { 'branches.$.tests': { id: testObject.id } } },
+        { new: true }
+      )
+    }
+    
+
+    res.status(200).json({success: true})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error'})
+  }
+})
+app.post('/api/updateABTest', async (req, res) => {
+  const {gameID, branchName, testObject} = req.body
+
+  try {
+
+    let formattedTestObject = testObject;
+    formattedTestObject.segments = JSON.stringify(formattedTestObject.segments)
+    formattedTestObject.observedMetric = JSON.stringify(formattedTestObject.observedMetric)
+    formattedTestObject.subject = JSON.stringify(formattedTestObject.subject)
+
+
+    const abTests = await ABTests.findOneAndUpdate(
+      { 'gameID': gameID, 'branches.branch': branchName },
+      { $set: { 'branches.$[outer].tests.$[inner]': formattedTestObject } },
+      {
+        arrayFilters: [
+          { 'outer.branch': branchName },
+          { 'inner.id': testObject.id },
+        ],
+      }
+    )
+
+    res.status(200).json({success: true})
+
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({success: false, message: 'Internal Server Error'})
+  }
+})
+
+async function populateABtests(gameID) {
+  const newABTests = new ABTests({
+    gameID: gameID,
+    branches: [
+      {
+        branch: 'development',
+        tests: [],
+      },
+      {
+        branch: 'stage',
+        tests: [],
+      },
+      {
+        branch: 'production',
+        tests: [],
+      },
+    ],
+  });
+  await newABTests.save();
+}
+
+
+
 
 app.post('/api/testFunc', async (req, res) => {
   const {gameID, branchName, type, payload} = req.body
@@ -11585,7 +11899,7 @@ async function populatePlayerWarehouse(gameID, branchName) {
 
 }
 // populatePlayerWarehouse('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
-
+cachePlayers('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
 
 async function populateElements(gameID, branchName) {
   const playerWarehouse = await PlayerWarehouse.findOneAndUpdate(
