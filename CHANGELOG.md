@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.11.0
+2024-05-18
+
+### Features
+
+- ab tests API (ad376e658c524ee069e885b08fa1fb62585319b7)
+
 ## 1.10.0
 2024-05-11
 
