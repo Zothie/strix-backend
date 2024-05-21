@@ -1,6 +1,5 @@
-const mongoose = require('mongoose');
-
-  const offerSchema = new mongoose.Schema({
+import { Schema, model } from 'mongoose';
+  const offerSchema = new Schema({
     offerID: String,
     offerName: String,
     offerCodeName: String,
@@ -35,7 +34,7 @@ const mongoose = require('mongoose');
     content: Array,
   });
   
-  const branchSchema = new mongoose.Schema({
+  const branchSchema = new Schema({
     branch: {
       type: String,
       enum: ['development', 'stage', 'production'],
@@ -45,11 +44,10 @@ const mongoose = require('mongoose');
     positions: String,
   });
   
-  const resultSchema = new mongoose.Schema({
+  const resultSchema = new Schema({
     gameID: String,
     branches: [branchSchema],
   });
   
-  const OffersModel = mongoose.model('Offer', resultSchema, 'offers');
+  export const OffersModel = model('Offer', resultSchema, 'offers');
 
-  module.exports = OffersModel;

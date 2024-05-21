@@ -1,6 +1,5 @@
-const mongoose = require('mongoose');
-
-const linkSchema = new mongoose.Schema({
+import { Schema, model } from 'mongoose';
+const linkSchema = new Schema({
   source: String,
   target: String,
   sourceContent: String,
@@ -9,12 +8,12 @@ const linkSchema = new mongoose.Schema({
   right: Boolean,
 });
 
-const nodeSchema = new mongoose.Schema({
+const nodeSchema = new Schema({
   nodeID: String,
   nodeType: String,
 });
 
-const relationSchema = new mongoose.Schema({
+const relationSchema = new Schema({
   relationID: String,
   name: String,
   nodes: [nodeSchema],
@@ -22,20 +21,20 @@ const relationSchema = new mongoose.Schema({
   comment: String,
 });
 
-const contextNodeSchema = new mongoose.Schema({
+const contextNodeSchema = new Schema({
     nodeID: String,
     nodeType: String,
     emotion: String,
     instinct: String,
 });
-const contextSchema = new mongoose.Schema({
+const contextSchema = new Schema({
     contextID: String,
     name: String,
     comment: String,
     nodes: [contextNodeSchema],
 });
 
-const branchSchema = new mongoose.Schema({
+const branchSchema = new Schema({
   branch: {
     type: String,
     enum: ['development', 'stage', 'production'],
@@ -45,7 +44,7 @@ const branchSchema = new mongoose.Schema({
   contexts: [contextSchema],
 });
 
-const relationsSchema = new mongoose.Schema({
+const relationsSchema = new Schema({
   gameID: {
     type: String,
     required: true,
@@ -53,6 +52,5 @@ const relationsSchema = new mongoose.Schema({
   branches: [branchSchema],
 });
 
-const Relations = mongoose.model('Relation', relationsSchema, 'relations');
+export const Relations = model('Relation', relationsSchema, 'relations');
 
-module.exports = Relations;

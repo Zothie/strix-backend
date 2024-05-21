@@ -1,11 +1,12 @@
-const mongoose = require('mongoose');
+import { Schema, model } from 'mongoose';
 
-const valueSchema = new mongoose.Schema({
+
+const valueSchema = new Schema({
   valueName: String,
   valueFormat: String,
   valueCountMethod: String,
 });
-const eventSchema = new mongoose.Schema({
+const eventSchema = new Schema({
   eventID: String,
   eventName: String,
   eventCodeName: String,
@@ -14,16 +15,15 @@ const eventSchema = new mongoose.Schema({
   tags: [String],
 });
 
-const branchSchema = new mongoose.Schema({
+const branchSchema = new Schema({
   branch: String,
   events: [eventSchema],
 });
 
-const gameSchema = new mongoose.Schema({
+const gameSchema = new Schema({
   gameID: String,
   branches: [branchSchema],
 });
 
-const AnalyticsEvents = mongoose.model('AnalyticsEvents', gameSchema);
+export const AnalyticsEvents = model('AnalyticsEvents', gameSchema);
 
-module.exports = AnalyticsEvents;

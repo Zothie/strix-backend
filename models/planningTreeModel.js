@@ -1,6 +1,5 @@
-const mongoose = require('mongoose');
-
-const planningTreeSubnodeSchema = new mongoose.Schema({
+import { Schema, model } from 'mongoose';
+const planningTreeSubnodeSchema = new Schema({
   nodeID: {
     type: String,
     required: true,
@@ -18,7 +17,7 @@ planningTreeSubnodeSchema.add({
   subnodes: [planningTreeSubnodeSchema],
 });
 
-const planningTreePlanningTypeSchema = new mongoose.Schema({
+const planningTreePlanningTypeSchema = new Schema({
   type: {
     type: String,
     required: true,
@@ -27,7 +26,7 @@ const planningTreePlanningTypeSchema = new mongoose.Schema({
   nodes: [planningTreeSubnodeSchema],
 });
 
-const planningTreeBranchSchema = new mongoose.Schema({
+const planningTreeBranchSchema = new Schema({
   branch: {
     type: String,
     enum: ['development', 'stage', 'production'],
@@ -36,7 +35,7 @@ const planningTreeBranchSchema = new mongoose.Schema({
   planningTypes: [planningTreePlanningTypeSchema],
 });
 
-const planningTreeSchema = new mongoose.Schema({
+const planningTreeSchema = new Schema({
   gameID: {
     type: String,
     required: true,
@@ -44,6 +43,5 @@ const planningTreeSchema = new mongoose.Schema({
   branches: [planningTreeBranchSchema],
 });
 
-const PlanningTreeModel = mongoose.model('Planning', planningTreeSchema);
+export const PlanningTreeModel = model('Planning', planningTreeSchema);
 
-module.exports = PlanningTreeModel;

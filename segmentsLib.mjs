@@ -1,8 +1,8 @@
-const Segments = require('./models/segmentsModel')
-const PlayerWarehouse = require('./models/playerWarehouseModel')
+import {Segments} from './models/segmentsModel.js'
+import {PWplayers as PlayerWarehouse} from './models/PWplayers.js'
 
 // Here we calculate all conditions and return true or false if player should be in a given segment
-function calculatePlayerSegment(playerObject, segment) {
+export function calculatePlayerSegment(playerObject, segment) {
     const segmentConditions = segment.segmentConditions;
   
     let resultToCalculate = '';
@@ -188,7 +188,7 @@ function calculatePlayerSegment(playerObject, segment) {
     }
 }
 // Adding segmentID string to player segments[] in Player Warehouse
-async function addSegmentToPlayer(gameID, branchName, clientID, newSegment) {
+export async function addSegmentToPlayer(gameID, branchName, clientID, newSegment) {
     try {
       // Находим игрока по gameID, branchName и clientID
       const player = await PlayerWarehouse.findOne({
@@ -224,7 +224,7 @@ async function addSegmentToPlayer(gameID, branchName, clientID, newSegment) {
     }
 }
 // Change segment document playerCount after we add new player to segment
-async function incrementSegmentPlayerCount(gameID, branchName, segmentID) {
+export async function incrementSegmentPlayerCount(gameID, branchName, segmentID) {
     try {
       const result = await Segments.updateOne(
         {
@@ -256,7 +256,7 @@ async function incrementSegmentPlayerCount(gameID, branchName, segmentID) {
 }
 
 // Removing segmentID string from player's segments[] in Player Warehouse
-async function removeSegmentFromPlayer(gameID, branchName, clientID, segmentToRemove) {
+export async function removeSegmentFromPlayer(gameID, branchName, clientID, segmentToRemove) {
     try {
       // Используем $pull для удаления сегмента из массива в MongoDB
       const result = await PlayerWarehouse.updateOne(
@@ -290,7 +290,7 @@ async function removeSegmentFromPlayer(gameID, branchName, clientID, segmentToRe
     }
 }
 // Change segment document playerCount after we remove player to segment
-async function decrementSegmentPlayerCount(gameID, branchName, segmentID) {
+export async function decrementSegmentPlayerCount(gameID, branchName, segmentID) {
     try {
       const result = await Segments.updateOne(
         {
@@ -321,7 +321,7 @@ async function decrementSegmentPlayerCount(gameID, branchName, segmentID) {
     }
 }
 
-async function addClientToSegment(gameID, branchName, segmentID, clientID) {
+export async function addClientToSegment(gameID, branchName, segmentID, clientID) {
   try {
     // Найти сегмент по ID
     const segment = await Segments.findOne(
@@ -366,7 +366,7 @@ async function addClientToSegment(gameID, branchName, segmentID, clientID) {
     console.error(error.message);
   }
 }
-async function removeClientFromSegment(gameID, branchName, segmentID, clientID) {
+export async function removeClientFromSegment(gameID, branchName, segmentID, clientID) {
   try {
     // Найти сегмент по ID
     const segment = await Segments.findOne(
@@ -413,12 +413,3 @@ async function removeClientFromSegment(gameID, branchName, segmentID, clientID) 
     console.error(error.message);
   }
 }
-
-
-module.exports = {
-    calculatePlayerSegment,
-    addSegmentToPlayer,
-    incrementSegmentPlayerCount,
-    removeSegmentFromPlayer,
-    decrementSegmentPlayerCount,
-};

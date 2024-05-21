@@ -1,22 +1,23 @@
-require('dotenv').config();
+// require('dotenv').config();
+import dotenv from 'dotenv';
 
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const bodyParser = require('body-parser');
-const uuid = require('uuid');
-const jwt = require('jsonwebtoken');
-const secretKey = '123';
-const axios = require('axios');
-const moment = require('moment');
-const http = require('http');
-const dayjs = require('dayjs');
-const jStat = require('jstat');
-const abTestResults = require('ab-test-result')
-
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import bodyParser from 'body-parser';
+import { v4 as uuid } from 'uuid';
+import jwt from 'jsonwebtoken';
+import secretKey from 'dotenv';
+import axios from 'axios';
+import moment from 'moment';
+import http from 'http';
+import dayjs from 'dayjs';
+import jStat from 'jstat';
+import abTestResults from 'ab-test-result'
+import * as d3 from 'd3-random';
 // const morgan = require('morgan');
 
-
+dotenv.config();
 const app = express();
 const port = 3001;
 const host = '0.0.0.0'
@@ -26,26 +27,26 @@ app.use(express.json({limit: '50mb'}));
 app.use(express.urlencoded({limit: '50mb'}));
 // app.use(morgan('combined'));
 
-const PlanningTreeModel = require('./models/planningTreeModel');
-const User = require('./models/userModel')
-const NodeModel = require('./models/nodeModel')
-const Game = require('./models/gameModel')
-const Studio = require('./models/studioModel')
-const Publisher = require('./models/publisherModel')
-const RemoteConfig = require('./models/remoteConfigModel')
-const AnalyticsEvents = require('./models/analyticsevents')
-const Segments = require('./models/segmentsModel')
-const PlayerWarehouse = require('./models/playerWarehouseModel')
-const Relations = require('./models/relationsModel.js')
-const Localization = require('./models/localizationModel.js')
-const Offers = require('./models/offersModel.js')
-const CustomCharts = require('./models/charts.js')
-const ABTests = require('./models/abtests.js')
+import {PlanningTreeModel} from './models/planningTreeModel.js';
+import {User} from './models/userModel.js'
+import {NodeModel} from './models/nodeModel.js'
+import {Game} from './models/gameModel.js'
+import {Studio} from './models/studioModel.js'
+import {Publisher} from './models/publisherModel.js'
+import {RemoteConfig} from './models/remoteConfigModel.js'
+import {AnalyticsEvents} from './models/analyticsevents.js'
+import {Segments} from './models/segmentsModel.js'
+import {Relations} from './models/relationsModel.js'
+import {Localization} from './models/localizationModel.js'
+import {OffersModel as Offers} from './models/offersModel.js'
+import {charts as CustomCharts} from './models/charts.js'
+import {ABTests} from './models/ABTests.js'
+import {PWplayers} from './models/PWplayers.js'
+import {PWtemplates} from './models/PWtemplates.js'
 
-
-const segmentsLib = require('./segmentsLib.cjs')
-const druidLib = require('./druidLib.cjs')
-const playerWarehouseLib = require('./playerWarehouseLib.cjs')
+import * as segmentsLib from './segmentsLib.mjs'
+import druidLib from './druidLib.cjs'
+import * as playerWarehouseLib from './playerWarehouseLib.mjs'
 
 
 
@@ -53,7 +54,7 @@ mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 
 // Firebase
-const admin = require('firebase-admin');
+import firebase from 'firebase-admin'
 //  Admin SDK config
 const firebaseCredentials = {  
   type: `${process.env.FB_ASDK_TYPE}`,
@@ -68,8 +69,8 @@ const firebaseCredentials = {
   client_x509_cert_url: `${process.env.FB_ASDK_CLIENT_CERT}`,
   universe_domain: `${process.env.FB_ASDK_UNIVERSE_DOMAIN}`,
 };
-admin.initializeApp({
-  credential: admin.credential.cert(firebaseCredentials)
+firebase.initializeApp({
+  credential: firebase.credential.cert(firebaseCredentials)
 });
 function formatPrivateKey(key) {
     return key.replace(/\\n/g, "\n")
@@ -194,13 +195,13 @@ app.post('/api/finishInitialOnboarding', async (req, res) => {
       user.username = username;
       await user.save();
 
-      const publisherID = uuid.v4();
+      const publisherID = uuid();
       const publisher = new Publisher({ publisherID, publisherName });
       const newPermission = { permission: 'read' };
       publisher.users.push({ userID: user.email, userPermissions: [newPermission] });
 
 
-      const studioID = uuid.v4();
+      const studioID = uuid();
       const studio = new Studio({ studioID, studioName, apiKey: studioApiKey, studioIcon });
       await studio.save();
   
@@ -212,7 +213,7 @@ app.post('/api/finishInitialOnboarding', async (req, res) => {
             // const demoGameID = `demoGame`;
             const demoGameID = `a5f10dcc-84e2-4c7d-90eb-37f172131396`;
 
-            const newGameID = `demoGame_${uuid.v4()}`;
+            const newGameID = `demoGame_${uuid()}`;
 
             const demoGame = await Game.findOne({ gameID: demoGameID });
             const newGame = new Game({
@@ -220,7 +221,7 @@ app.post('/api/finishInitialOnboarding', async (req, res) => {
               gameName: demoGame.gameName,
               gameEngine: demoGame.gameEngine,
               gameIcon: demoGame.gameIcon,
-              gameSecretKey: uuid.v4(),
+              gameSecretKey: uuid(),
             });
             await newGame.save();
           
@@ -252,12 +253,21 @@ app.post('/api/finishInitialOnboarding', async (req, res) => {
             await newAnalyticsEvents.save();
           
             // Creating new game doc in PlayerWarehouse
-            const demoPlayerWarehouse = PlayerWarehouse.findOne({ gameID: demoGameID });
-            const newPlayerWarehouse = new PlayerWarehouse({
+            const demoPWplayers = PWplayers.aggregate([
+              { $match: { gameID: demoGameID } },
+              { $group: { _id: null, players: { $push: '$$ROOT' } } },
+            ]);
+            await PWplayers.collection.insertMany({
               gameID: newGameID,
-              ...demoPlayerWarehouse
+              ...demoPWplayers,
             });
-            await newPlayerWarehouse.save();
+
+            const demoPWtemplates = PWtemplates.findOne({ gameID: demoGameID });
+            const newPWtemplates = new PWtemplates({
+              gameID: newGameID,
+              ...demoPWtemplates
+            });
+            await newPWtemplates.save();
           
             // Creating new game doc in RemoteConfig
             const demoRemoteConfig = RemoteConfig.findOne({ gameID: demoGameID });
@@ -385,7 +395,7 @@ app.post('/api/addStudio', async (req, res) => {
   }
 
   try {
-    const studioID = uuid.v4();
+    const studioID = uuid();
     // Создать нового паблишера
     const studio = new Studio({ studioID, studioName, apiKey, studioIcon });
     // Сохранить паблишера в базу данных
@@ -478,7 +488,7 @@ app.post('/api/createGame', async (req, res) => {
   const { studioID, gameName, gameEngine, gameKey, gameIcon } = req.body;
 
   // Создаем новый gameID с использованием uuid
-  const newGameID = uuid.v4();
+  const newGameID = uuid();
 
   try {
     // Создаем новую игру
@@ -583,8 +593,7 @@ app.post('/api/createGame', async (req, res) => {
     });
     await newAnalyticsEvents.save();
 
-    // Creating new game doc in PlayerWarehouse
-    const newPlayerWarehouse = new PlayerWarehouse({
+    const newPWtemplates = new PWtemplates({
       gameID: newGameID,
       branches: [
         {
@@ -646,7 +655,8 @@ app.post('/api/createGame', async (req, res) => {
         },
       ],
     });
-    await newPlayerWarehouse.save();
+    await newPWtemplates.save();
+
 
     // Creating new game doc in RemoteConfig
     const newRemoteConfig = new RemoteConfig({
@@ -994,7 +1004,7 @@ app.post('/api/revokeStudioKey', async (req, res) => {
     const { studioID } = req.body;
 
     const updatedData = {};
-    updatedData.apiKey = uuid.v4();
+    updatedData.apiKey = uuid();
 
     const studio = await Studio.findOneAndUpdate({ studioID: studioID }, updatedData, { new: true });
     if (!studio) {
@@ -1012,7 +1022,7 @@ app.post('/api/revokeGameKey', async (req, res) => {
     const { gameID } = req.body;
 
     const updatedData = {};
-    updatedData.gameSecretKey = uuid.v4();
+    updatedData.gameSecretKey = uuid();
 
     const game = await Game.findOneAndUpdate({ gameID: gameID }, updatedData, { new: true });
     if (!game) {
@@ -1428,7 +1438,7 @@ app.post('/api/createEntity', async (req, res) => {
       'branches.branch': branch
     };
 
-    const newNodeID = uuid.v4();
+    const newNodeID = uuid();
     
     const update = {
       $push: { 
@@ -1488,7 +1498,7 @@ app.post('/api/createEntityBulk', async (req, res) => {
     };
 
     const newNodes = entityObjArray.map(entityObj => {
-      const newNodeID = uuid.v4();
+      const newNodeID = uuid();
       return {
         nodeID: newNodeID,
         name: entityObj.entityName,
@@ -1791,7 +1801,7 @@ app.post('/api/removePlanningNode', async (req, res) => {
 async function removeAnalyticsTemplatesByEventID(gameID, branchName, eventIDs) {
   try {
     // Найти и сохранить templateID удаляемых шаблонов
-    const templates = await PlayerWarehouse.find(
+    const templates = await PWtemplates.find(
       { gameID, 'branches.branch': branchName, 'branches.templates.analytics.templateAnalyticEventID': { $in: eventIDs } },
       { 'branches.templates.analytics.$': 1 }
     );
@@ -1809,7 +1819,7 @@ async function removeAnalyticsTemplatesByEventID(gameID, branchName, eventIDs) {
     });
 
     // Удаление шаблонов аналитики
-    const result = await PlayerWarehouse.updateMany(
+    const result = await PWtemplates.updateMany(
       { gameID, 'branches.branch': branchName },
       { $pull: { 'branches.$[].templates.analytics': { templateAnalyticEventID: { $in: eventIDs } } } }
     );
@@ -2845,6 +2855,7 @@ async function resolveEntityObjAfterMoving(gameID, branch, node, newParentID) {
   function clearInheritedConfigs() {
     const inheritedCategoriesSet = new Set(newInheritedCategories);
 
+    if (targetNode[entityConfigField].inheritedConfigs === '') return []
     let nodeConfigs = JSON.parse(targetNode[entityConfigField].inheritedConfigs)
 
     const filteredInheritedConfigs = nodeConfigs.filter(config => {
@@ -3900,9 +3911,24 @@ app.post('/api/getOffers', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 })
+
 app.post('/api/removeOffer', async (req, res) => {
   const { gameID, branch, offerID } = req.body;
   try {
+
+    let positions = await Offers.findOne({ gameID, 'branches.branch': branch });
+    if (!positions) {
+      return res.status(404).json({ success: false, message: 'Offer not found' });
+    }
+    positions = JSON.parse(positions.branches.find(b => b.branch === branch).positions)
+    positions = positions.map(p => {
+      p.segments = p.segments.map(s => {
+        s.offers = s.offers.filter(o => o !== offerID)
+        return s
+      })
+      return p
+    })
+    positions = JSON.stringify(positions)
 
     const result = await Offers.findOneAndUpdate(
       { 
@@ -3912,7 +3938,10 @@ app.post('/api/removeOffer', async (req, res) => {
       { 
         $pull: { 
           'branches.$[branch].offers': { offerID: offerID } 
-        } 
+        },
+        $set: { 
+          'branches.$[branch].positions': positions
+        }
       },
       {
         arrayFilters: [
@@ -5072,26 +5101,17 @@ app.post('/api/countPlayersInWarehouse', async (req, res) => {
     }
 
     // Поиск игроков по gameID и branchName
-    const playerWarehouse = await PlayerWarehouse.findOne({ gameID, 'branches.branch': branchName });
+    const players = await PWplayers.find(
+      { gameID, branch: branchName },
+    );
 
     // Если не найдены, возвращаем ошибку
-    if (!playerWarehouse) {
+    if (!players) {
       return res.status(404).json({ message: 'PlayerWarehouse not found for the specified gameID and branchName' });
     }
 
-    // Поиск ветки по branchName
-    const branch = playerWarehouse.branches.find(b => b.branch === branchName);
-
-    // Если не найдена ветка, возвращаем ошибку
-    if (!branch) {
-      return res.status(404).json({ message: 'Branch not found for the specified branchName' });
-    }
-
-    // Получение количества игроков в массиве players
-    const playerCount = branch.players.length;
-
     // Возвращаем успешный ответ с количеством игроков
-    res.status(200).json({ success: true, playerCount });
+    res.status(200).json({ success: true, playerCount: players.length });
 
   } catch (error) {
     console.error('Error counting players in warehouse:', error);
@@ -5108,7 +5128,7 @@ app.post('/api/getTemplatesForSegments', async (req, res) => {
     }
 
     // Поиск сегментов по gameID и branchName
-    const playerWarehouse = await PlayerWarehouse.findOne({ gameID, 'branches.branch': branchName });
+    const playerWarehouse = await PWtemplates.findOne({ gameID, 'branches.branch': branchName });
 
     // Если не найдены, возвращаем ошибку
     if (!playerWarehouse) {
@@ -5193,15 +5213,18 @@ app.post('/api/refreshSegmentPlayerCount', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
+
+
+
 async function refreshSegmentPlayerCount(gameID, branchName, segmentID) {
   try {
 
     // Находим всех игроков, у которых в массиве segments есть указанный segmentID
-    const playersWithSegment = await PlayerWarehouse.find({
-      'gameID': gameID,
-      'branches.branch': branchName,
-      'branches.players.segments': segmentID,
-    });
+    const playersWithSegment = await PWplayers.find(
+      { gameID, branch: branchName, segments: {$in: [segmentID]} },
+    );
+    
 
     // Обновляем segmentPlayerCount в модели Segments
     const result = await Segments.updateOne(
@@ -5256,18 +5279,10 @@ async function recalculateSegment(gameID, branchName, segmentID) {
       const response = await druidLib.getRecentClientIDs(gameID, branchName)
       const clientIDs = response;
 
-      let players = await PlayerWarehouse.find({
-        gameID,
-        'branches.branch': branchName,
-        'branches.players.clientID': { $in: clientIDs.map(String) },
-      });
+      const players = await PWplayers.find(
+        { gameID, branch: branchName, clientID: { $in: clientIDs.map(String) } },
+      );
 
-      players = players[0].branches.reduce((acc, branch) => {
-        if (branch.branch === branchName) {
-          acc = [...acc, ...branch.players];
-        }
-        return acc;
-      }, []);
       // Recalculating target segment for each clientID
       const promises = players.map(async (player) => {
         if (player) {
@@ -5343,21 +5358,9 @@ app.post('/api/addStatisticsTemplate', async (req, res) => {
 
   try {
     // Найти документ PlayerWarehouse по gameID
-    let playerWarehouse = await PlayerWarehouse.findOne({ gameID });
-    // Если не найден, создать новый документ
-    if (!playerWarehouse) {
-      playerWarehouse = await PlayerWarehouse.create({
-        gameID,
-        branches: [{ branch: branchName, templates: { statistics: [] } }],
-      });
-    } else {
-      // Проверить, существует ли уже branch с указанным branchName
-      const existingBranchIndex = playerWarehouse.branches.findIndex((b) => b.branch === branchName);
-      // Если не существует, создать новый branch
-      if (existingBranchIndex === -1) {
-        playerWarehouse.branches.push({ branch: branchName, templates: { statistics: [] } });
-      }
-    }
+    let playerWarehouse = await PWtemplates.findOne({ gameID });
+    // Проверить, существует ли уже branch с указанным branchName
+    const existingBranchIndex = playerWarehouse.branches.findIndex((b) => b.branch === branchName);
 
     // Извлечь нужный branch
     const branchIndex = playerWarehouse.branches.findIndex((b) => b.branch === branchName);
@@ -5396,7 +5399,7 @@ app.post('/api/updateStatisticsTemplate', async (req, res) => {
 
   try {
 
-    const result = await PlayerWarehouse.findOneAndUpdate(
+    await PWtemplates.findOneAndUpdate(
       { 
         "gameID": gameID,
         "branches.branch": branchName,
@@ -5433,18 +5436,10 @@ app.post('/api/getWarehouseTemplates', async (req, res) => {
 
   try {
     // Найти документ PlayerWarehouse по gameID и branchName
-    let playerWarehouse = await PlayerWarehouse.findOne({
+    let playerWarehouse = await PWtemplates.findOne({
       gameID,
       'branches.branch': branchName,
     });
-
-    // Если не найден, создать новый документ
-    if (!playerWarehouse) {
-      playerWarehouse = await PlayerWarehouse.create({
-        gameID,
-        branches: [{ branch: branchName, templates: {} }],
-      });
-    }
 
     // Извлечь нужный branch
     const branch = playerWarehouse.branches.find((b) => b.branch === branchName);
@@ -5499,22 +5494,25 @@ app.post('/api/getWarehouseTemplates', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+
+
 app.post('/api/getWarehousePlayers', async (req, res) => {
   const { gameID, branchName } = req.body;
 
   try {
     // Найти документ PlayerWarehouse по gameID и branchName
-    const playerWarehouse = await PlayerWarehouse.findOne({ gameID, 'branches.branch': branchName });
+    const playerWarehouse = await PWplayers.find(
+      { gameID, branch: branchName },
+      { elements: 0, inventory: 0, goods: 0, abtests: 0, segments: 0, branch: 0, _id: 0, gameID: 0 },
+    );
+
 
     if (!playerWarehouse) {
       return res.status(404).json({ message: 'PlayerWarehouse not found' });
     }
 
-    // Извлечь нужный branch
-    const branch = playerWarehouse.branches.find((b) => b.branch === branchName);
-
     // Извлечь массив clientID из players
-    const playerIDs = branch.players.map((player) => player.clientID);
+    const playerIDs = playerWarehouse.map((player) => player.clientID);
 
     res.status(200).json({ success: true, playerIDs });
   } catch (error) {
@@ -5522,28 +5520,23 @@ app.post('/api/getWarehousePlayers', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+
+
 app.post('/api/getWarehousePlayerData', async (req, res) => {
   const { gameID, branchName, clientID } = req.body;
 
   try {
     // Найти документ PlayerWarehouse по gameID и branchName
-    const playerWarehouse = await PlayerWarehouse.findOne({
-      gameID,
-      'branches.branch': branchName,
-      'branches.players.clientID': clientID,
-    });
+    const playerWarehouse = await PWplayers.findOne(
+      { gameID, branch: branchName, clientID },
+    );
+
 
     if (!playerWarehouse) {
       return res.status(404).json({ message: 'PlayerWarehouse not found' });
     }
 
-    // Извлечь нужный branch
-    const branch = playerWarehouse.branches.find((b) => b.branch === branchName);
-
-    // Извлечь объект player с соответствующим clientID
-    const player = branch.players.find((p) => p.clientID === clientID);
-
-    res.status(200).json({ success: true, player });
+    res.status(200).json({ success: true, player: playerWarehouse });
   } catch (error) {
     console.error('Error getting warehouse player data:', error);
     res.status(500).json({ message: 'Internal Server Error' });
@@ -5833,7 +5826,7 @@ app.post('/api/addAnalyticsTemplate', async (req, res) => {
     templateObject.templateID = templateID;
 
     // Находим или создаем объект playerWarehouse
-    let playerWarehouse = await PlayerWarehouse.findOne({ gameID });
+    let playerWarehouse = await PWtemplates.findOne({ gameID });
 
     if (!playerWarehouse) {
       playerWarehouse = new PlayerWarehouse({
@@ -5912,18 +5905,9 @@ async function calculateInitialElementValue(gameID, branchName, template) {
         // If there are no players, just return.
         if (!clientIDs || clientIDs.length === 0) return;
 
-        let players = await PlayerWarehouse.find({
-          gameID,
-          'branches.branch': branchName,
-          'branches.players.clientID': { $in: clientIDs.map(String) },
-        });
-
-        players = players[0].branches.reduce((acc, branch) => {
-          if (branch.branch === branchName) {
-            acc = [...acc, ...branch.players];
-          }
-          return acc;
-        }, []);
+        let players = await PWplayers.find(
+          { gameID, branch: branchName, clientID: { $in: clientIDs.map(String) } },
+        );
 
         // Iterate each found client
         const promises = players.map(async (player) => {
@@ -6102,7 +6086,7 @@ app.post('/api/removeWarehouseTemplate', async (req, res) => {
       return res.status(400).json({ message: 'Missing required parameters' });
     }
 
-    const result = await PlayerWarehouse.findOneAndUpdate(
+    const result = await PWtemplates.findOneAndUpdate(
       { gameID, 'branches.branch': branchName },
       {
         $pull: {
@@ -7330,9 +7314,9 @@ app.post('/api/analytics/getDAU', async (req, res) => {
   }
 
 });
-const randomNumberInRange = (min, max, isFloat) => {
+const randomNumberInRange = (min, max, isFloat, toFixed = 3) => {
   if (isFloat) {
-    return Math.random() * (max - min) + min;
+    return parseFloat(Math.random() * (max - min) + min).toFixed(toFixed);
   } else {
     return Math.round(Math.random() * (max - min)) + min;
   }
@@ -9629,177 +9613,17 @@ app.post('/api/analytics/getAdsRevenue', async (req, res) => {
 
 });
 
-let generatedPWPlayers = []
-async function generateRandomPWPlayers() {
-
-  let gameID = '0c2265e9-9fb1-49be-8f01-807f66c48522'
-  let branchName = 'development'
-
-
-    // Найти документ PlayerWarehouse по gameID и branchName
-    let playerWarehouse = await PlayerWarehouse.findOne({
-      gameID,
-      'branches.branch': branchName,
-    });
-
-    // Если не найден, создать новый документ
-    if (!playerWarehouse) {
-      playerWarehouse = await PlayerWarehouse.create({
-        gameID,
-        branches: [{ branch: branchName, templates: {} }],
-      });
-    }
-
-    // Извлечь нужный branch
-    const branch = playerWarehouse.branches.find((b) => b.branch === branchName);
-
-    // Вернуть объект templates из найденного branch
-    let templates = branch ? branch.templates : {};
-
-    // Поиск нужных ивентов в базе данных
-    let events = await AnalyticsEvents.findOne(
-      {
-        'gameID': gameID,
-        'branches': {
-          $elemMatch: {
-            'branch': branchName,
-          },
-        },
-      },
-      {
-        'branches.$': 1,
-      }
-    );
-    
-    if (!events) {
-      return res.status(404).json({ error: 'Events not found' });
-    }
-    events = events.branches[0].events
-
-    let segments = await Segments.findOne({ gameID, 'branches.branch': branchName });
-    const segmentBranch = segments.branches.find(b => b.branch === branchName);
-    segments = segmentBranch ? segmentBranch.segments : [];
-    segments = segments.map(segment => segment.segmentID)
-    .filter(segment => segment !== 'everyone')
-
-
-    let templatesTypes = {}
-
-    templatesTypes.analytics = templates.analytics.map(template => (
-      {
-        id: template.templateID,
-        type: events
-          .find(e => e.eventID === template.templateAnalyticEventID)
-          .values
-          .find(v => v._id.toString() === template.templateEventTargetValueId)
-          .valueFormat
-      }
-    ))
-    templatesTypes.statistics = templates.statistics.map(template => (
-      {
-        id: template.templateID,
-        type: template.templateType
-      }
-    ))
-
-
-
-    
-
-    function pickRandomSegments() {
-      const numberOfSegments = segments.length;
-      const shuffledIndexes = shuffle(Array.from(Array(numberOfSegments).keys()));
-
-      let chosenSegments = [];
-      for (let i = 0; i < randomNumberInRange(0, numberOfSegments); i++) {
-          chosenSegments.push(segments[shuffledIndexes[i]]);
-      }
-
-      return ['everyone', ...chosenSegments];
-    }
-    function shuffle(array) {
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
-        }
-        return array;
-    }
-
-    const words = [
-        "apple", "banana", "orange", "grape", "strawberry",
-        "peach", "pear", "watermelon", "pineapple", "kiwi",
-        "mango", "blueberry", "raspberry", "blackberry", "cherry",
-        "plum", "lemon", "lime", "apricot", "pomegranate",
-        "avocado", "coconut", "fig", "guava", "nectarine",
-        "papaya", "lychee", "passionfruit", "dragonfruit", "melon",
-        "starfruit", "cranberry", "kiwifruit", "tangerine", "persimmon",
-        "mulberry", "boysenberry", "gooseberry", "apricot", "cantaloupe",
-        "kumquat", "rhubarb", "date", "quince", "elderberry",
-        "plantain", "pumpkin", "squash", "zucchini", "eggplant"
-    ];
-
-    function getRandomWord() {
-        const randomIndex = Math.floor(Math.random() * words.length);
-        return words[randomIndex];
-    }
-
-    function getRandomElementValue(type) {
-      if (type === 'string') {
-        return getRandomWord();
-      } 
-      if (type === 'integer') {
-        return randomNumberInRange(10, 100);
-      }
-      if (type === 'float') {
-        return randomNumberInRange(10, 100, true);
-      }
-      if (type === 'bool') {
-        return randomNumberInRange(0, 1) === 1;
-      }
-    }
-    // 153567
-    for (let i = 0; i < 153567; i++) {
-      generatedPWPlayers.push({
-        clientID: uuid.v4(),
-        segments: pickRandomSegments(),
-        elements: []
-            .concat(
-              templatesTypes.analytics.map(template => ({
-                elementID: template.id,
-                elementValue: getRandomElementValue(template.type),
-              }))
-            )
-            .concat(
-                templatesTypes.statistics.map(template => ({
-                elementID: template.id,
-                elementValue: getRandomElementValue(template.type),
-              }))
-            )
-        // elements: {
-        //   analytics: templatesTypes.analytics.map(template => ({
-        //     elementID: template.id,
-        //     elementValue: getRandomElementValue(template.type),
-        //   })),
-        //   statistics: templatesTypes.statistics.map(template => ({
-        //     elementID: template.id,
-        //     elementValue: getRandomElementValue(template.type),
-        //   })),
-        // }
-      })
-    }
-
-    // console.log('Generated PW players')
-}
-// generateRandomPWPlayers()
 
 let cachedWarehousePlayers = []
 async function cachePlayers(gameID, branchName) {
-  const playerWarehouse = await PlayerWarehouse.findOne({ gameID, 'branches.branch': branchName }).lean();
+
+  const playerWarehouse = await PWplayers.find(
+    { gameID, branch: branchName },
+  ).lean();
   if (!playerWarehouse) {
     return
   }
-  const players = playerWarehouse.branches.find(b => b.branch === branchName).players
-  cachedWarehousePlayers = players.map(player => ({
+  cachedWarehousePlayers = playerWarehouse.map(player => ({
     ...player,
     elements: [].concat(player.elements.analytics).concat(player.elements.statistics)
   }))
@@ -9821,76 +9645,140 @@ app.post('/api/analytics/getProfileComposition', async (req, res) => {
 
   try {
 
-    const composition = cachedWarehousePlayers.filter(p => getComposition(p))
-
-    function getComposition(player) {
-      if (!player.segments.includes(baseSegment)) return false
-
-      if (filters.length === 0) return true
-
-
-      let evalString = ''
-      for (const filter of filters) {
-
-        if (filter.condition) {
-          evalString += filter.condition === 'and' ? '*' : '+'
-        } else {
-          let targetElement = player.elements
-                              .find(element => element.elementID === filter.templateID)
-  
-          if (!targetElement) {
-            return false
-          } else {
-            switch (filter.filterCondition) {
-              case 'is':
-                evalString += Number(targetElement.elementValue === filter.filterValue)
-                break;
-              case 'is not':
-                evalString += Number(targetElement.elementValue !== filter.filterValue)
-                break;
-              case 'contains':
-                evalString += Number(targetElement.elementValue.includes(filter.filterValue))
-                break;
-              case 'starts with':
-                evalString += Number(targetElement.elementValue.startsWith(filter.filterValue))
-                break;
-              case 'ends with':
-                evalString += Number(targetElement.elementValue.endsWith(filter.filterValue))
-                break;
-              case '>':
-                evalString += Number(targetElement.elementValue > filter.filterValue)
-                break;
-              case '<':
-                evalString += Number(targetElement.elementValue < filter.filterValue)
-                break;
-              case '>=':
-                evalString += Number(targetElement.elementValue >= filter.filterValue)
-                break;
-              case '<=':
-                evalString += Number(targetElement.elementValue <= filter.filterValue)
-                break;
-              case 'dateRange':
-                const startDate = new Date(filter.filterValue[0]);
-                const endDate = new Date(filter.filterValue[1]);
-                const targetDate = new Date(targetElement.elementValue);
-                const isWithinRange = targetDate >= startDate && targetDate <= endDate;
-                evalString += Number(isWithinRange)
-                break;
-              default:
-                evalString += '0'
-                break;
-            }
-          }
-        }
-
-      }
-      const result = eval(evalString)
-      return result
+    // We need to get the playerCount for the base segment to calculate the sample size
+    // before querying the database
+    let segmentCount = await Segments.findOne({ gameID, 'branches.branch': branchName })
+    segmentCount = segmentCount.branches
+    .find(b => b.branch === branchName).segments
+    .find(s => s.segmentID === baseSegment)?.segmentPlayerCount
+    if (segmentCount == undefined) {
+      segmentCount = 0
     }
 
-  function getRandomSample(players, confidenceLevel) {
-    const n = players.length;
-    // console.log('Number of players:', n);
+    // Calculating the sample size
+    let sampleSize = getSampleSize(segmentCount, 0.99)
+    console.log('sampleSize', sampleSize)
+
+    // Getting templates so we can build the query
+    let warehouseTemplates = await PWtemplates.findOne({gameID, 'branches.branch': branchName})
+    warehouseTemplates = warehouseTemplates.branches.find(b => b.branch === branchName).templates
+
+    function getTemplateType(templateID) {
+      if (warehouseTemplates.analytics.some(t => t.templateID === templateID)) {
+        return 'analytics'
+      } else if (warehouseTemplates.statistics.some(t => t.templateID === templateID)) {
+        return 'statistics'
+      } else {
+        return null
+      }
+    }
+
+    async function buildQuery() {
+      const queryConditions = [];
+    
+      for (const filter of filters) {
+        if (filter.condition) {
+          if (filter.condition === 'and') {
+            queryConditions.push({ $and: [] });
+          } else if (filter.condition === 'or') {
+            queryConditions.push({ $or: [] });
+          }
+        } else {
+          const targetElementPath = `elements.${getTemplateType(filter.templateID)}.elementID`;
+          const targetValuePath = `elements.${getTemplateType(filter.templateID)}.elementValue`;
+    
+          let condition = {};
+          let formattedValue = filter.filterValue;
+          switch (filter.filterCondition) {
+            case 'is':
+              formattedValue = filter.filterValue.toString()
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: formattedValue } } };
+              break;
+            case 'is not':
+              formattedValue = filter.filterValue.toString()
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: { $ne: formattedValue } } } };
+              break;
+            case 'contains':
+              formattedValue = filter.filterValue.toString()
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: { $regex: formattedValue, $options: 'i' } } } };
+              break;
+            case 'starts with':
+              formattedValue = filter.filterValue.toString()
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: { $regex: `^${formattedValue}`, $options: 'i' } } } };
+              break;
+            case 'ends with':
+              formattedValue = filter.filterValue.toString()
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: { $regex: `${formattedValue}$`, $options: 'i' } } } };
+              break;
+            case '>':
+              formattedValue = parseFloat(filter.filterValue)
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: { $gt: formattedValue } } } };
+              break;
+            case '<':
+              formattedValue = parseFloat(filter.filterValue)
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: { $lt: formattedValue } } } };
+              break;
+            case '>=':
+              formattedValue = parseFloat(filter.filterValue)
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: { $gte: formattedValue } } } };
+              break;
+            case '<=':
+              formattedValue = parseFloat(filter.filterValue)
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: { $lte: formattedValue } } } };
+              break;
+            case '=': 
+              formattedValue = parseFloat(filter.filterValue)
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: formattedValue } } };
+              break;
+            case '!=':
+              formattedValue = parseFloat(filter.filterValue)
+              condition = { [`elements.${getTemplateType(filter.templateID)}`]: { $elemMatch: { elementID: filter.templateID, elementValue: { $ne: formattedValue } } } };
+              break;
+            case 'dateRange':
+              const [startDate, endDate] = filter.filterValue.map(date => new Date(date));
+              condition = { 'elements.analytics': { $elemMatch: { elementID: filter.templateID, elementValue: { $gte: startDate, $lte: endDate } } } };
+              break;
+            default:
+              continue;
+          }
+          
+          if (queryConditions.length > 0 && queryConditions[queryConditions.length - 1].$and) {
+            queryConditions[queryConditions.length - 1].$and.push(condition);
+          } else if (queryConditions.length > 0 && queryConditions[queryConditions.length - 1].$or) {
+            queryConditions[queryConditions.length - 1].$or.push(condition);
+          } else {
+            queryConditions.push(condition);
+          }
+        }
+      }
+      
+      const baseSegmentFilter = {
+        ['segments']: { $in: [baseSegment] }
+      }
+      const defaultQuery = {
+        gameID, 
+        branch: branchName,
+      }
+
+      return { $and: [defaultQuery, baseSegmentFilter, ...queryConditions] };
+    }
+    const query = await buildQuery()
+
+    // Finding the total count of filtered players
+    const totalCount = await PWplayers.find(query).count()
+    // console.log('totalCount', totalCount)
+
+    // Making the sample
+    let players
+    if (filters.length > 0) {
+      players = await PWplayers.find(query).limit(sampleSize).lean()
+    } else {
+      players = []
+    }
+
+
+  function getSampleSize(totalSampleSize, confidenceLevel) {
+    const n = totalSampleSize;
 
     const expectedProportion = 0.5;
     const marginOfError = 0.05;
@@ -9904,22 +9792,21 @@ app.post('/api/analytics/getProfileComposition', async (req, res) => {
     let sampleSize = Math.ceil(Math.pow((z * Math.sqrt(expectedProportion * (1 - expectedProportion))) / marginOfError, 2));
     sampleSize = clamp(sampleSize, 1, n);
 
-    const sample = [];
-    for (let i = 0; i < sampleSize; i++) {
-        const randomIndex = Math.floor(Math.random() * n);
-        sample.push(players[randomIndex]);
-    }
-    return sample;
+    return sampleSize;
   }
 
-  let sample = [];
-  if (element1 !== '' || element2 !== '') {
-    sample = getRandomSample(composition, 0.95).filter(Boolean);
+  if (players && players.length > 0) {
+    players = players.map(p => {
+      return {
+        ...p,
+        elements: [].concat(p.elements.analytics).concat(p.elements.statistics)
+      }
+    })
   }
 
 
 
-  res.status(200).json({ success: true, composition: composition.length, sample: sample });
+  res.status(200).json({ success: true, composition: totalCount, sample: players });
 
   } catch (error) {
     console.log(error)
@@ -11614,26 +11501,21 @@ app.post('/api/testFunc', async (req, res) => {
 });
 
 
+function getRandomDateInRange(startDate, endDate) {
+  const startTimestamp = startDate.getTime();
+  const endTimestamp = endDate.getTime();
+  const randomTimestamp = startTimestamp + Math.random() * (endTimestamp - startTimestamp);
+  return new Date(randomTimestamp).toISOString();
+}
 async function populatePlayerWarehouse(gameID, branchName) {
-
-  const playerWarehouse = await PlayerWarehouse.findOne({ 
-    gameID: gameID, 
-    'branches.branch': branchName 
-  })
-
-  function getRandomDateInRange(startDate, endDate) {
-    const startTimestamp = startDate.getTime();
-    const endTimestamp = endDate.getTime();
-    const randomTimestamp = startTimestamp + Math.random() * (endTimestamp - startTimestamp);
-    return new Date(randomTimestamp).toISOString();
-  }
 
   const Aelements = [
     // Default elements
     'lastReturnDate', 
-    'lastPaymentDate', 
     'totalPaymentsCount', 
     'totalPaymentsSumm', 
+    'meanPaymentRecency',
+    'lastPaymentDate', 
     'country',
     'language',
     'platform',
@@ -11647,232 +11529,144 @@ async function populatePlayerWarehouse(gameID, branchName) {
   ]
   let segmentCounts = {}
 
-  playerWarehouse.branches.find(b => b.branch === branchName).players = []
-  for (let i = 0; i < 1000; i++) {
-    playerWarehouse.branches.find(b => b.branch === branchName).players.push({
-      clientID: uuid.v4(),
+  async function generatePlayer() {
+
+
+    function getRandomDateInRange(start, end) {
+      return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+    }
+    
+    function getRandomCountry() {
+      const countries = ['United States', 'Canada', 'Mexico', 'Brazil', 'France', 'Germany', 'Spain', 'Italy', 'Japan', 'China', 'India', 'Russia', 'Australia', 'South Korea', 'Indonesia', 'Thailand', 'Vietnam', 'Turkey', 'Iran', 'Egypt', 'Argentina', 'Colombia'];
+      return countries[Math.floor(Math.random() * countries.length)];
+    }
+    
+    function getRandomLanguage() {
+      const languages = ['English', 'Spanish', 'French', 'German', 'Italian', 'Japanese', 'Chinese', 'Korean', 'Russian', 'Portuguese', 'Arabic', 'Hindi'];
+      return languages[Math.floor(Math.random() * languages.length)];
+    }
+    
+    function getRandomPlatform() {
+      const platforms = ['Android 10', 'iOS 14', 'Windows 10', 'MacOS 11', 'Linux'];
+      return platforms[Math.floor(Math.random() * platforms.length)];
+    }
+    
+    function getRandomEngineVersion() {
+      const engines = ['Unity 2021.3.9f1', 'Unity 2021.3.8f1', 'Unity 2021.3.7f1', 'Unity 2021.3.6f1', 'Unreal Engine 5.1', 'Unreal Engine 5.0', 'Unreal Engine 4.27'];
+      return engines[Math.floor(Math.random() * engines.length)];
+    }
+    
+    function getRandomGameVersion() {
+      const versions = ['1.9.1', '1.9.0', '1.8.0', '1.7.0'];
+      return versions[Math.floor(Math.random() * versions.length)];
+    }
+
+    let global_lrd
+    let global_tpc
+    let global_mpr
+
+    let uniformRandom = d3.randomUniform(0, 1);
+    let normalRandom = d3.randomNormal(5, 2);
+    
+    const player = {
+      gameID: gameID,
+      branch: branchName,
+      clientID: uuid(),
       elements: {
-        analytics: [],
+        analytics: Aelements.map(element => {
+          let tempVal;
+          switch (element) {
+            case 'lastReturnDate':
+              tempVal = uniformRandom(0, 1) < 0.95 ? getRandomDateInRange(new Date(), new Date(Date.now() - 1000 * 60 * 60 * 24 * 25)) : getRandomDateInRange(new Date(), new Date(Date.now() - 1000 * 60 * 60 * 24 * 30));
+              global_lrd = new Date(tempVal);
+              break;
+  
+            case 'lastPaymentDate':
+              if (global_mpr !== -1) {
+                // Устанавливаем диапазон дат в зависимости от meanPaymentRecency
+                const daysAgo = Math.min(15, Math.max(3, Math.ceil(global_mpr)));
+                tempVal = getRandomDateInRange(global_lrd, new Date(Date.now() - 1000 * 60 * 60 * 24 * daysAgo));
+              } else {
+                tempVal = new Date(0); // Если нет платежей, установим нулевую дату
+              }
+              break;
+  
+            case 'totalPaymentsCount':
+              const randValue = uniformRandom();
+              if (randValue < 0.90) {
+                tempVal = 0;
+              } else if (randValue < 0.95) {
+                tempVal = Math.max(1, Math.floor(normalRandom(5, 2))); // Значения между 1 и 10
+              } else {
+                tempVal = Math.floor(normalRandom(20, 5)); // Значения выше 10
+              }
+              global_tpc = tempVal;
+              break;
+  
+            case 'totalPaymentsSumm':
+              tempVal = global_tpc * Math.max(1, d3.randomNormal(0.5, 1)());
+              break;
+  
+            case 'meanPaymentRecency':
+              if (global_tpc !== 0) {
+                // Более управляемый расчет meanPaymentRecency
+                const baseRecency = 30; // Базовое значение, для расчета средних дней между платежами
+                tempVal = baseRecency / global_tpc;
+                // Добавим немного случайности, чтобы значения не были слишком однообразными
+                tempVal *= uniformRandom(0.8, 1.2); 
+                tempVal = parseFloat(Math.max(0, tempVal).toFixed(1)); // Убедимся, что значение не меньше 1
+              } else {
+                tempVal = -1;
+              }
+              global_mpr = tempVal;
+              break;
+  
+            case 'country':
+              tempVal = getRandomCountry();
+              break;
+  
+            case 'language':
+              tempVal = getRandomLanguage();
+              break;
+  
+            case 'platform':
+              tempVal = getRandomPlatform();
+              break;
+  
+            case 'meanSessionLength':
+              tempVal = Math.floor(d3.randomNormal(1800, 100)());
+              break;
+  
+            case 'engineVersion':
+              tempVal = getRandomEngineVersion();
+              break;
+  
+            case 'gameVersion':
+              tempVal = getRandomGameVersion();
+              break;
+          }
+          return { elementID: element, elementValue: tempVal };
+        }),
+        statistics: Selements.map(element => {
+          let tempVal;
+          switch (element) {
+            case '663b55700b77992003716823':
+              tempVal = uniformRandom(0, 1) < 0.5 ? 'True' : 'False';
+              break;
+          }
+          return { elementID: element, elementValue: tempVal };
+        })
       },
       inventory: [],
       goods: [],
       abtests: [],
       segments: [],
-    })
-  }
-  playerWarehouse.branches.find(b => b.branch === branchName).players.forEach((player, index) => {
-
-
-    let global_lrd
-    let global_tpc
-
-    player.elements.analytics = Aelements.map(element => {
-      let tempVal
-      switch (element) {
-
-        case 'lastReturnDate':
-          if (randomNumberInRange(1, 100) < 95) {
-            tempVal = getRandomDateInRange(new Date(), new Date(Date.now() - 1000 * 60 * 60 * 24 * 25))
-          } else {
-            tempVal = getRandomDateInRange(new Date(), new Date(Date.now() - 1000 * 60 * 60 * 24 * 30))
-          }
-          global_lrd = new Date(tempVal)
-          break;
-
-
-        case 'lastPaymentDate':
-          if (randomNumberInRange(1, 100) < 80) {
-            tempVal = getRandomDateInRange(global_lrd, new Date(global_lrd - 1000 * 60 * 60 * 24 * 15))
-          } else {
-            tempVal = getRandomDateInRange(global_lrd, new Date(global_lrd - 1000 * 60 * 60 * 24 * 3))
-          }
-          break;
-
-
-        case 'totalPaymentsSumm':
-          tempVal = global_tpc*randomNumberInRange(0.1, 10, true)
-          break;
-
-
-        case 'totalPaymentsCount':
-          switch (randomNumberInRange(1, 5)) {
-            case 1: 
-              tempVal = randomNumberInRange(3, 5)
-              global_tpc = tempVal
-            break;
-            case 2: 
-              tempVal = randomNumberInRange(5, 7)
-              global_tpc = tempVal
-            break;
-            case 3: 
-              tempVal = randomNumberInRange(3, 9)
-              global_tpc = tempVal
-            break;
-            case 4: 
-              tempVal = randomNumberInRange(9, 15)
-              global_tpc = tempVal
-            break;
-            case 5: 
-              tempVal = randomNumberInRange(10, 20)
-              global_tpc = tempVal
-            break;
-          }
-          break;
-
-
-        case 'country':
-          function getRandomCountry() {
-            const countries = [
-              'United States',
-              'Canada',
-              'Mexico', 
-              'Brazil', 
-              'France', 
-              'Germany', 
-              'Spain', 
-              'Italy', 
-              'Japan', 
-              'China', 
-              'India', 
-              'Russia', 
-              'Australia', 
-              'South Korea', 
-              'Indonesia', 
-              'Thailand', 
-              'Vietnam', 
-              'Turkey', 
-              'Iran', 
-              'Egypt', 
-              'Argentina', 
-              'Colombia',
-            ]
-            return countries[randomNumberInRange(0, countries.length - 1)]
-          }
-          tempVal = getRandomCountry()
-          break;
-
-
-        case 'language':
-          function getRandomLanguage() {
-            const languages = [
-              'English',
-              'Spanish',
-              'French',
-              'German',
-              'Italian',
-              'Japanese',
-              'Chinese',
-              'Korean',
-              'Russian',
-              'Portuguese',
-              'Arabic',
-              'Hindi',
-            ]
-            return languages[randomNumberInRange(0, languages.length - 1)]
-          }
-          tempVal = getRandomLanguage()
-          break;
-
-
-        case 'platform':
-          function getRandomPlatform() {
-            const platforms = [
-              'Android 10',
-              'iOS 14',
-              'Windows 10',
-              'MacOS 11',
-              'Linux',
-            ]
-            return platforms[randomNumberInRange(0, platforms.length - 1)]
-          }
-          tempVal = getRandomPlatform()
-          break;
-
-
-        case 'meanSessionLength':
-          tempVal = randomNumberInRange(1000, 1800)
-          break;
-
-
-        case 'engineVersion':
-          function getRandomEngineVersion() {
-            const engines = [
-              'Unity 2021.3.9f1',
-              'Unity 2021.3.8f1',
-              'Unity 2021.3.7f1',
-              'Unity 2021.3.6f1',
-              'Unreal Engine 5.1',
-              'Unreal Engine 5.0',
-              'Unreal Engine 4.27',
-            ]
-            return engines[randomNumberInRange(0, engines.length - 1)]
-          }
-          tempVal = getRandomEngineVersion()
-          break;
-
-
-        case 'gameVersion':
-          function getRandomGameVersion() {
-            const versions = [
-              '1.9.1',
-              '1.9.0',
-              '1.8.0',
-              '1.7.0',
-            ]
-            return versions[randomNumberInRange(0, versions.length - 1)]
-          }
-          tempVal = getRandomGameVersion()
-          break;
-
-
-      }
-
-      return {
-        elementID: element,
-        elementValue: tempVal
-      }
-    })
-
-    player.elements.statistics = Selements.map(element => {
-      let tempVal
-      switch (element) {
-        case '663b55700b77992003716823':
-          switch (randomNumberInRange(0, 1)) {
-            case 1: 
-              tempVal = 'True'
-            break;
-            case 0: 
-              tempVal = 'False'
-            break;
-          }
-          break;
-      }
-
-      return {
-        elementID: element,
-        elementValue: tempVal
-      }
-    })
-
+    };
 
     const possibleSegments = ['everyone', '6635ed2abd20c2e1a4f238a6', '6635ed30bd20c2e1a4f23932']
-    player.segments.push(possibleSegments[0])
-    switch (randomNumberInRange(1, 5)) {
-      case 1:
-        player.segments.push(possibleSegments[1])
-        break;
-      default:
-        break;
-    }
-    switch (randomNumberInRange(1, 5)) {
-      case 1:
-      case 2:
-      case 3:
-        player.segments.push(possibleSegments[2])
-        break;
-      default:
-        break;
-    }
+    player.segments.push(possibleSegments[0]);
+    if (uniformRandom(0, 1) <= 0.20) player.segments.push(possibleSegments[1]);
+    if (uniformRandom(0, 1) <= 0.60) player.segments.push(possibleSegments[2]);
 
     player.segments.forEach(segment => {
       if (!segmentCounts[segment]) {
@@ -11880,7 +11674,30 @@ async function populatePlayerWarehouse(gameID, branchName) {
       }
       segmentCounts[segment]++
     })
-  })
+
+    return player
+  }
+
+  const totalBatches = 10;
+  const batchSize = 10000;
+
+  const res = await PWplayers.deleteMany({gameID, branch: branchName})
+  console.log('Deleted players', res)
+
+  console.log('Generating players for PW. Batch size: ' + batchSize + ', total batches: ' + totalBatches);
+  for (let i = 0; i < totalBatches; i++) {
+    const playerPromises = Array.from({ length: batchSize }, () => generatePlayer());
+    const players = await Promise.all(playerPromises);
+    
+    console.log('Populated player warehouse, saving')
+    try {
+      await PWplayers.collection.insertMany(players)
+    } catch (error) {
+      console.log('Error inserting players:', error)
+    }
+    console.log('Saved')
+  }
+
 
   const segments = await Segments.findOne({ gameID, 'branches.branch': branchName })
   const branch = segments.branches.find(b => b.branch === branchName)
@@ -11891,18 +11708,36 @@ async function populatePlayerWarehouse(gameID, branchName) {
   await segments.save()
 
   
-  console.log('Populated player warehouse, saving')
-  // playerWarehouse.branches.find(b => b.branch === branchName).players = players
-  await playerWarehouse.save()
-
+  
   console.log('Populated database')
 
 }
-// populatePlayerWarehouse('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
-cachePlayers('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
+async function hardPopulation() {
+  // await populatePlayerWarehouse('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
+  // await cachePlayers('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
+}
+hardPopulation()
+
+async function testFunctionPW() {
+  const gameID = '8e116fca-66c4-4669-beb9-56d99940f70d'
+  const branchName = 'development'
+  const segmentID = 'everyone'
+  const clientID = '99e0999b-e891-4782-bf18-c5833c73fa12'
+
+  // const players = await PWplayers.find(
+  //   {gameID, 'elements.analytics': { $elemMatch: {'elementID': 'totalPaymentsCount', 'elementValue': { $gt: 0 } } }}
+  // ).count()
+  // console.log('players', players)
+  // let playerWarehouse = await PWtemplates.findOne({
+  //   gameID,
+  //   'branches.branch': branchName,
+  // });
+  // console.log('playerWarehouse', playerWarehouse)
+}
+testFunctionPW()
 
 async function populateElements(gameID, branchName) {
-  const playerWarehouse = await PlayerWarehouse.findOneAndUpdate(
+  await PWtemplates.findOneAndUpdate(
     { gameID: gameID, 'branches.branch': branchName },
     { $push: { 'branches.$.templates.analytics': {
 
@@ -11914,7 +11749,7 @@ async function populateElements(gameID, branchName) {
       new: true
     }
   )
-  const playerWarehouse2 = await PlayerWarehouse.findOneAndUpdate(
+  await PWtemplates.findOneAndUpdate(
     { gameID: gameID, 'branches.branch': branchName },
     { $push: { 'branches.$.templates.analytics': 
     {
@@ -11927,7 +11762,7 @@ async function populateElements(gameID, branchName) {
       new: true
     }
   )
-  const playerWarehouse3 = await PlayerWarehouse.findOneAndUpdate(
+  await PWtemplates.findOneAndUpdate(
     { gameID: gameID, 'branches.branch': branchName },
     { $push: { 'branches.$.templates.analytics': 
     {
@@ -11940,7 +11775,7 @@ async function populateElements(gameID, branchName) {
       new: true
     }
   )
-  const playerWarehouse4 = await PlayerWarehouse.findOneAndUpdate(
+  await PWtemplates.findOneAndUpdate(
     { gameID: gameID, 'branches.branch': branchName },
     { $push: { 'branches.$.templates.analytics': 
     {
@@ -11953,7 +11788,7 @@ async function populateElements(gameID, branchName) {
       new: true
     }
   )
-  const playerWarehouse5 = await PlayerWarehouse.findOneAndUpdate(
+  await PWtemplates.findOneAndUpdate(
     { gameID: gameID, 'branches.branch': branchName },
     { $push: { 'branches.$.templates.analytics': 
     {
@@ -11966,7 +11801,7 @@ async function populateElements(gameID, branchName) {
       new: true
     }
   )
-  const playerWarehouse6 = await PlayerWarehouse.findOneAndUpdate(
+  await PWtemplates.findOneAndUpdate(
     { gameID: gameID, 'branches.branch': branchName },
     { $push: { 'branches.$.templates.analytics': 
     {
@@ -11979,7 +11814,7 @@ async function populateElements(gameID, branchName) {
       new: true
     }
   )
-  const playerWarehouse7 = await PlayerWarehouse.findOneAndUpdate(
+  await PWtemplates.findOneAndUpdate(
     { gameID: gameID, 'branches.branch': branchName },
     { $push: { 'branches.$.templates.analytics': 
     {
@@ -11992,7 +11827,7 @@ async function populateElements(gameID, branchName) {
       new: true
     }
   )
-  const playerWarehouse8 = await PlayerWarehouse.findOneAndUpdate(
+  await PWtemplates.findOneAndUpdate(
     { gameID: gameID, 'branches.branch': branchName },
     { $push: { 'branches.$.templates.analytics': 
     {
@@ -12005,7 +11840,20 @@ async function populateElements(gameID, branchName) {
       new: true
     }
   )
-  const playerWarehouse9 = await PlayerWarehouse.findOneAndUpdate(
+  await PWtemplates.findOneAndUpdate(
+    { gameID: gameID, 'branches.branch': branchName },
+    { $push: { 'branches.$.templates.analytics': 
+    {
+      templateID: 'platform',
+      templateName: 'Platform',
+      templateDefaultVariantType: 'string'
+    }
+    } },
+    {
+      new: true
+    }
+  )
+  await PWtemplates.findOneAndUpdate(
     { gameID: gameID, 'branches.branch': branchName },
     { $push: { 'branches.$.templates.analytics': 
     {

@@ -1,7 +1,6 @@
-const mongoose = require('mongoose');
+import { Schema, model } from 'mongoose';
 
-
-const segmentSchema = new mongoose.Schema({
+const segmentSchema = new Schema({
   segmentID: {
     type: String,
     required: true,
@@ -13,7 +12,7 @@ const segmentSchema = new mongoose.Schema({
   segmentPlayerIDs: [String]
 });
 
-const branchSchema = new mongoose.Schema({
+const branchSchema = new Schema({
   branch: {
     type: String,
     required: true,
@@ -21,7 +20,7 @@ const branchSchema = new mongoose.Schema({
   segments: [segmentSchema],
 });
 
-const segmentsSchema = new mongoose.Schema({
+const segmentsSchema = new Schema({
   gameID: {
     type: String,
     required: true,
@@ -29,6 +28,4 @@ const segmentsSchema = new mongoose.Schema({
   branches: [branchSchema],
 });
 
-const Segments = mongoose.model('Segments', segmentsSchema);
-
-module.exports = Segments;
+export const Segments = model('Segments', segmentsSchema);

@@ -1,6 +1,5 @@
-const mongoose = require('mongoose');
-
-const valueSchema = new mongoose.Schema({
+import { Schema, model } from 'mongoose';
+const valueSchema = new Schema({
   segmentID: String,
   value: String,
   valueFileName: String,
@@ -10,7 +9,7 @@ const valueSchema = new mongoose.Schema({
   eventID: String,
 });
 
-const paramSchema = new mongoose.Schema({
+const paramSchema = new Schema({
   paramID: {
     type: String,
     required: true,
@@ -21,7 +20,7 @@ const paramSchema = new mongoose.Schema({
   values: [valueSchema],
 });
 
-const branchSchema = new mongoose.Schema({
+const branchSchema = new Schema({
   branch: {
     type: String,
     enum: ['development', 'stage', 'production'],
@@ -30,7 +29,7 @@ const branchSchema = new mongoose.Schema({
   params: [paramSchema],
 });
 
-const remoteConfigSchema = new mongoose.Schema({
+const remoteConfigSchema = new Schema({
   gameID: {
     type: String,
     required: true,
@@ -38,6 +37,4 @@ const remoteConfigSchema = new mongoose.Schema({
   branches: [branchSchema],
 });
 
-const RemoteConfig = mongoose.model('RemoteConfig', remoteConfigSchema);
-
-module.exports = RemoteConfig;
+export const RemoteConfig = model('RemoteConfig', remoteConfigSchema);

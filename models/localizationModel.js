@@ -1,6 +1,5 @@
-const mongoose = require('mongoose');
-
-  const translationSchema = new mongoose.Schema({
+import { Schema, model } from 'mongoose';
+  const translationSchema = new Schema({
     code: {
       type: String,
       required: true
@@ -11,7 +10,7 @@ const mongoose = require('mongoose');
     }
   });
 
-  const localizationItemSchema = new mongoose.Schema({
+  const localizationItemSchema = new Schema({
     sid: {
       type: String,
       required: true
@@ -21,13 +20,13 @@ const mongoose = require('mongoose');
     translations: [translationSchema],
   });
   
-  const localizationSchema = new mongoose.Schema({
+  const localizationSchema = new Schema({
     offers: [localizationItemSchema],
     entities: [localizationItemSchema],
     custom: [localizationItemSchema],
   });
   
-  const branchSchema = new mongoose.Schema({
+  const branchSchema = new Schema({
     branch: {
       type: String,
       enum: ['development', 'stage', 'production'],
@@ -36,11 +35,10 @@ const mongoose = require('mongoose');
     localization: localizationSchema,
   });
   
-  const resultSchema = new mongoose.Schema({
+  const resultSchema = new Schema({
     gameID: String,
     branches: [branchSchema],
   });
   
-  const Localization = mongoose.model('Localization', resultSchema, 'localizations');
+  export const Localization = model('Localization', resultSchema, 'localizations');
 
-  module.exports = Localization;

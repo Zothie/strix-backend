@@ -1,8 +1,8 @@
-const PlayerWarehouse = require('./models/playerWarehouseModel')
+import {PWplayers as PlayerWarehouse} from './models/PWplayers.js'
 
 
 // Set elementValue of a given player
-async function setElementValue(gameID, branchName, clientID, elementID, elementValue) {
+export async function setElementValue(gameID, branchName, clientID, elementID, elementValue) {
   
     try {
       // Находим объект в модели PlayerWarehouse по gameID и clientID
@@ -85,7 +85,7 @@ async function setElementValue(gameID, branchName, clientID, elementID, elementV
     }
 }
 // Set elementValues of a given player. Used for such templateMethods as "mostCommon" & "leastCommon" as they return an array
-async function setElementValues(gameID, branchName, clientID, elementID, elementValues) {
+export async function setElementValues(gameID, branchName, clientID, elementID, elementValues) {
   
   
     try {
@@ -170,7 +170,7 @@ async function setElementValues(gameID, branchName, clientID, elementID, element
 }
 // Here we set elementValue but only if it doesnt exist
 // Needed for 'first sent value' method of templates
-async function setElementValueFirstTimeOnly(gameID, branchName, clientID, elementID, elementValue) {
+export async function setElementValueFirstTimeOnly(gameID, branchName, clientID, elementID, elementValue) {
   
     try {
       // Находим объект в модели PlayerWarehouse по gameID и clientID
@@ -251,7 +251,7 @@ async function setElementValueFirstTimeOnly(gameID, branchName, clientID, elemen
     }
 }
 // "Number of events" template method
-async function incrementElementValue(gameID, branchName, clientID, elementID) {
+export async function incrementElementValue(gameID, branchName, clientID, elementID) {
   
     try {
       // Находим объект в модели PlayerWarehouse по gameID и clientID
@@ -335,7 +335,7 @@ async function incrementElementValue(gameID, branchName, clientID, elementID) {
     }
 }
 // "Summ" template method
-async function addSummToElementValue(gameID, branchName, clientID, elementID, elementFormat, elementValueToAdd) {
+export async function addSummToElementValue(gameID, branchName, clientID, elementID, elementFormat, elementValueToAdd) {
   
     try {
       // Находим объект в модели PlayerWarehouse по gameID и clientID
@@ -423,12 +423,4 @@ async function addSummToElementValue(gameID, branchName, clientID, elementID, el
     } catch (error) {
       console.error('Error updating/creating elementValue:', error);
     }
-}
-
-module.exports = {
-    setElementValue,
-    setElementValues,
-    setElementValueFirstTimeOnly,
-    incrementElementValue,
-    addSummToElementValue
 }

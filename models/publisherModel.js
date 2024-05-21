@@ -1,5 +1,4 @@
-const mongoose = require('mongoose');
-const publisherSchema = new mongoose.Schema({
+import { Schema, model } from 'mongoose';const publisherSchema = new Schema({
     publisherID: String,
     publisherName: String,
     studios: [{ 
@@ -9,6 +8,5 @@ const publisherSchema = new mongoose.Schema({
       userPermissions: [{ permission: String }] }]
   });
   
-  const Publisher = mongoose.model('Publisher', publisherSchema);
+  export const Publisher = model('Publisher', publisherSchema);
 
-  module.exports = Publisher;

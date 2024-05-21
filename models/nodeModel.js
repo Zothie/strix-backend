@@ -1,6 +1,5 @@
-const mongoose = require('mongoose');
-
-  const entityBasicSchema = new mongoose.Schema({
+import { Schema, model } from 'mongoose';
+  const entityBasicSchema = new Schema({
     entityID: String,
 
     isInAppPurchase: Boolean,
@@ -15,7 +14,7 @@ const mongoose = require('mongoose');
     inheritedConfigs: String,
   });
 
-  const entityCategorySchema = new mongoose.Schema({
+  const entityCategorySchema = new Schema({
     categoryID: String,
 
     mainConfigs: String,
@@ -24,7 +23,7 @@ const mongoose = require('mongoose');
     inheritedConfigs: String,
   });
   
-  const nodeSchema = new mongoose.Schema({
+  const nodeSchema = new Schema({
     nodeID: {
       type: String,
       required: true,
@@ -43,7 +42,7 @@ const mongoose = require('mongoose');
     entityBasic: entityBasicSchema,
   });
   
-  const planningTypeSchema = new mongoose.Schema({
+  const planningTypeSchema = new Schema({
     type: {
       type: String,
       required: true,
@@ -52,7 +51,7 @@ const mongoose = require('mongoose');
     nodes: [nodeSchema],
   });
   
-  const branchSchema = new mongoose.Schema({
+  const branchSchema = new Schema({
     branch: {
       type: String,
       enum: ['development', 'stage', 'production'],
@@ -61,12 +60,11 @@ const mongoose = require('mongoose');
     planningTypes: [planningTypeSchema],
   });
   
-  const resultNodeSchema = new mongoose.Schema({
+  const resultNodeSchema = new Schema({
     gameID: String,
     branches: [branchSchema],
   });
   
   // Создание модели на основе схемы
-  const NodeModel = mongoose.model('Node', resultNodeSchema, 'nodes');
+  export const NodeModel = model('Node', resultNodeSchema, 'nodes');
 
-  module.exports = NodeModel;

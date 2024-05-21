@@ -1,23 +1,21 @@
-const mongoose = require('mongoose');
-
-const dashboardSchema = new mongoose.Schema({
+import { Schema, model } from 'mongoose';
+const dashboardSchema = new Schema({
   id: String,
   name: String,
   linkName: String,
   charts: String
 });
 
-const branchSchema = new mongoose.Schema({
+const branchSchema = new Schema({
   branch: String,
   dashboards: [dashboardSchema],
   profileCompositionPresets: String,
 });
 
-const gameSchema = new mongoose.Schema({
+const gameSchema = new Schema({
   gameID: String,
   branches: [branchSchema],
 });
 
-const charts = mongoose.model('charts', gameSchema);
+export const charts = model('charts', gameSchema);
 
-module.exports = charts;

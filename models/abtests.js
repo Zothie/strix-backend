@@ -1,6 +1,6 @@
-const mongoose = require('mongoose');
+import { Schema, model } from 'mongoose';
 
-const tests = new mongoose.Schema({
+const tests = new Schema({
   id: String,
   codename: String,
   name: String,
@@ -15,16 +15,14 @@ const tests = new mongoose.Schema({
   archivedResult: String,
 });
 
-const branchSchema = new mongoose.Schema({
+const branchSchema = new Schema({
   branch: String,
   tests: [tests],
 });
 
-const testsSchema = new mongoose.Schema({
+const testsSchema = new Schema({
   gameID: String,
   branches: [branchSchema],
 });
 
-const ABTests = mongoose.model('ABTests', testsSchema);
-
-module.exports = ABTests;
+export const ABTests = model('ABTests', testsSchema);

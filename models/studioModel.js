@@ -1,5 +1,4 @@
-const mongoose = require('mongoose');
-const studiosSchema = new mongoose.Schema({
+import { Schema, model } from 'mongoose';const studiosSchema = new Schema({
     studioID: String,
     studioName: String,
     studioIcon: String,
@@ -12,6 +11,5 @@ const studiosSchema = new mongoose.Schema({
       userPermissions: [{ permission: String }] }]
   });
   
-  const Studio = mongoose.model('Studio', studiosSchema);
+  export const Studio = model('Studio', studiosSchema);
 
-  module.exports = Studio;
