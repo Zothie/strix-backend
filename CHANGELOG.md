@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.12.2
+2024-05-21
+
+### Fixes
+
+- moved to a new module import, made new updated API calls for analytics events (6691020b74667cbbe2811752a3ab7f1216ce9119)
+
 ## 1.12.1
 2024-05-21
 
