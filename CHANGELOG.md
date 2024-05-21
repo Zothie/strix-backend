@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.12.0
+2024-05-21
+
+### Features
+
+- moved to ES6, added d3-random, remade profile composition calls, added new API calls (8f4ba11e77f87cd0c69a5104f42018923d0f5745)
+
 ## 1.11.0
 2024-05-18
 
