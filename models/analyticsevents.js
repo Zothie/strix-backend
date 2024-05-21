@@ -10,6 +10,7 @@ const eventSchema = new Schema({
   eventID: String,
   eventName: String,
   eventCodeName: String,
+  removed: Boolean,
   values: [valueSchema],
   comment: String,
   tags: [String],

@@ -4543,9 +4543,9 @@ app.post('/api/getAnalyticsEventsConfig', async (req, res) => {
 });
 app.post('/api/createNewAnalyticsEvent', async (req, res) => {
   try {
-    const { gameID, branchName, nodeID } = req.body;
+    const { gameID, branchName } = req.body;
 
-    if (!gameID || !branchName || !nodeID) {
+    if (!gameID || !branchName) {
       return res.status(400).json({ message: 'Missing required parameters' });
     }
 
@@ -4569,26 +4569,26 @@ app.post('/api/createNewAnalyticsEvent', async (req, res) => {
     );
 
     // Добавление ID нового ивента в ноду
-    const nodeModel = await NodeModel.findOne({ gameID, 'branches.branch': branchName });
-    if (nodeModel) {
-      nodeModel.branches.forEach(branch => {
-        if (branch.branch === branchName) {
-          branch.planningTypes.forEach(planningType => {
-            planningType.nodes.forEach(node => {
-              if (node.nodeID === nodeID) {
-                node.analyticsEvents.push(eventID);
-              }
-            });
-          });
-        }
-      });
-      await nodeModel.save();
-    }
+    // const nodeModel = await NodeModel.findOne({ gameID, 'branches.branch': branchName });
+    // if (nodeModel) {
+    //   nodeModel.branches.forEach(branch => {
+    //     if (branch.branch === branchName) {
+    //       branch.planningTypes.forEach(planningType => {
+    //         planningType.nodes.forEach(node => {
+    //           if (node.nodeID === nodeID) {
+    //             node.analyticsEvents.push(eventID);
+    //           }
+    //         });
+    //       });
+    //     }
+    //   });
+    //   await nodeModel.save();
+    // }
 
     res.status(200).json({
       success: true,
       message: 'New analytics event created',
-      eventID
+      newEvent
     });
   } catch (error) {
     console.error('Error creating new analytics event:', error);
@@ -4619,6 +4619,31 @@ app.post('/api/removeAnalyticsEvent', async (req, res) => {
       { $pull: { 'branches.$.planningTypes.$[type].nodes.$[n].analyticsEvents': eventID } },
       { arrayFilters: [{ 'type.type': { $exists: true } }, { 'n.nodeID': nodeID }] }
     );
+
+    res.status(200).json({ success: true, message: 'Analytics event deleted' });
+  } catch (error) {
+    console.error('Error deleting analytics event:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+});
+app.post('/api/v2/removeAnalyticsEvent', async (req, res) => {
+  try {
+    const { gameID, branchName, eventID } = req.body;
+
+    if (!gameID || !branchName || !eventID) {
+      return res.status(400).json({ message: 'Missing required parameters' });
+    }
+
+    // Set analytics event field "removed" to true
+    const result = await AnalyticsEvents.findOneAndUpdate(
+      { gameID, 'branches.branch': branchName },
+      { $set: { 'branches.$.events.$[e].removed': true } },
+      { arrayFilters: [{ 'e.eventID': eventID }] }
+    );
+
+    if (!result) {
+      return res.status(404).json({ message: 'Analytics event not found' });
+    }
 
     res.status(200).json({ success: true, message: 'Analytics event deleted' });
   } catch (error) {
@@ -5712,6 +5737,34 @@ app.post('/api/getAllAnalyticsEvents', async (req, res) => {
     }
 
     res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+app.post('/api/v2/getAllAnalyticsEvents', async (req, res) => {
+  try {
+    const { gameID, branchName, getRemoved } = req.body;
+
+    if (!gameID || !branchName) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+
+    let events = await AnalyticsEvents.findOne(
+      {
+        'gameID': gameID,
+        'branches.branch': branchName,
+      },
+      {
+        'branches.$': 1,
+      }
+    );
+    events = events?.branches[0].events;
+    if (events && events.length > 0 && !getRemoved) {
+      events = events.filter(event => !event.removed)
+    }
+
+    res.status(200).json({success: true, message: 'Analytics events retrieved successfully', events: events });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Internal Server Error' });
