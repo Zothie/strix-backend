@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.12.3
+2024-05-21
+
+### Fixes
+
+- changed module name (373242c471ecb8083da039bd78521c02d8897177)
+
 ## 1.12.2
 2024-05-21
 
