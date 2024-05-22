@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.12.4
+2024-05-22
+
+### Fixes
+
+- few fixes & new avg profile generation (ccb904f3e71b2058fccda152dab5b5bc55b94b8d)
+
 ## 1.12.3
 2024-05-21
 
