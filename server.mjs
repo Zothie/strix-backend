@@ -7598,6 +7598,8 @@ app.post('/api/analytics/getRevenue', async (req, res) => {
 
     let clientIDs = []
 
+    let deltaValue = 0
+
     if (filterSegments && filterSegments.length !== 0) {
       clientIDs = await getPlayersFromSegment(gameID, branchName, filterSegments)
     }
@@ -7665,6 +7667,8 @@ app.post('/api/analytics/getRandomDataForUniversalChart', async (req, res) => {
     const startDate = new Date(filterDate[0])
     startDate.setUTCHours(0, 0, 0, 0);
     endDate.setUTCHours(23, 59, 59, 999);
+
+    let deltaValue = 0
 
     const dateDiff = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24));
 
@@ -7743,162 +7747,14 @@ app.post('/api/analytics/getAvgCustomerProfile', async (req, res) => {
     let generatedData_ARPPU = await generateRandomDataByDays(startDate, endDate, 0.3, 0.6, 0.1, 0.05)
     let generatedData_Recency = await generateRandomDataByDays(startDate, endDate, 1, 2, 0.1, 0.05)
     let generatedData_SalesPerLife = await generateRandomDataByDays(startDate, endDate, 2, 4, 0.01, 0.05)
+    let fetchedAvgProfile = await generateAvgProfile({gameID, branchName, filterSegments, salesCount: 1000})
 
     const avgProfile = {
       arppu: generatedData_ARPPU,
       arecppu: generatedData_Recency,
       asppu: generatedData_SalesPerLife,
       totalSales: 1000,
-      avgProfile: [
-        {
-          name: 'Game Level',
-          value: '4',
-          templateID: '1',
-          players: 321,
-          subProfiles: [
-            {
-              value: '3',
-              players: 120,
-            },
-            {
-              value: '2',
-              players: 56,
-            },
-            {
-              value: '1',
-              players: 21,
-            },
-          ]
-        },
-        {
-          name: 'Fav. Char',
-          value: 'Leon',
-          templateID: '2',
-          players: 632,
-          subProfiles: [
-            {
-              value: 'Shelly',
-              players: 120,
-            },
-            {
-              value: 'Bull',
-              players: 56,
-            },
-            {
-              value: 'Crow',
-              players: 21,
-            },
-          ]
-        },
-        {
-          name: 'Winrate',
-          value: '64%',
-          templateID: '3',
-          players: 345,
-          subProfiles: [
-            {
-              value: '63%',
-              players: 341,
-            },
-            {
-              value: '62%',
-              players: 334,
-            },
-            {
-              value: '61%',
-              players: 234,
-            },
-          ]
-        },
-        {
-          name: 'Retention',
-          value: 'D0',
-          templateID: '4',
-          players: 1231,
-          subProfiles: [
-            {
-              value: 'D3',
-              players: 120,
-            },
-            {
-              value: 'D2',
-              players: 56,
-            },
-            {
-              value: 'D1',
-              players: 21,
-            },
-          ]
-        },
-        {
-          name: 'Country',
-          value: 'USA',
-          templateID: '5',
-          players: 1231,
-          subProfiles: [
-            {
-              value: 'France',
-              players: 564,
-            },
-            {
-              value: 'Canada',
-              players: 341,
-            },
-            {
-              value: 'Germany',
-              players: 234,
-            },
-          ]
-        },
-        {
-          name: 'Total Summ Spent',
-          value: '$34',
-          templateID: '6',
-          players: 561,
-          subProfiles: [
-            {
-              value: '$54',
-              players: 120,
-            },
-            {
-              value: '$45',
-              players: 56,
-            },
-            {
-              value: '$76',
-              players: 21,
-            },
-          ]
-        },
-        {
-          name: 'IAP bought times',
-          value: '1',
-          templateID: '7',
-          players: 456,
-          subProfiles: [
-            {
-              value: '2',
-              players: 120,
-            },
-            {
-              value: '3',
-              players: 56,
-            },
-            {
-              value: '4',
-              players: 21,
-            },
-          ]
-        },
-        {
-          name: 'Segment',
-          value: 'New player',
-          templateID: '8',
-          players: 2312,
-          subProfiles: [
-          ]
-        },
-      ],
+      avgProfile: fetchedAvgProfile,
     }
 
     if (true) {
@@ -8285,17 +8141,7 @@ app.post('/api/analytics/getEconomyBalanceForCurrency', async (req, res) => {
     deltaStartDate.setUTCHours(0, 0, 0, 0);
     deltaEndDate.setUTCHours(23, 59, 59, 999);
 
-    const deltaDateDiff = (deltaEndDate - deltaStartDate) / (1000 * 60 * 60 * 24);
 
-    let clientIDs = []
-
-    if (filterSegments && filterSegments.length !== 0) {
-      clientIDs = await getPlayersFromSegment(gameID, branchName, filterSegments)
-    }
-    // const deltaResponse = await druidLib.getRevenue(gameID, branchName, deltaStartDate, deltaEndDate, deltaDateDiff, clientIDs)
-    // const response = await druidLib.getRevenue(gameID, branchName, startDate, endDate, dateDiff, clientIDs)
-
-    // const deltaValue = calculateDelta(deltaResponse, response)
     let generatedData = await generateRandomDataByDays(startDate, endDate, 80, 400, 0.1, 0.05, 0, 'timestamp', 'earn')
     let responseData = generatedData.map(i => 
       {
@@ -8397,14 +8243,9 @@ app.post('/api/analytics/getEconomyBalanceForCurrency', async (req, res) => {
         ],
       }
     })
+
     
-
-
-    if (true) {
-      res.status(200).json({success: true, message: {data: responseData, granularity: 'day' }})
-    } else{
-      res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
-    }
+    res.status(200).json({success: true, message: {data: responseData, granularity: 'day' }})
 
   } catch (error) {
     console.log(error)
@@ -8452,6 +8293,7 @@ app.post('/api/analytics/getPaymentDriversOffers', async (req, res) => {
     res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
   }
 });
+
 app.post('/api/analytics/getSourcesAndSinks', async (req, res) => {
 
   const {gameID, branchName, filterDate, filterSegments} = req.body
@@ -8461,13 +8303,17 @@ app.post('/api/analytics/getSourcesAndSinks', async (req, res) => {
     const sources = ['missionReward', 'questReward', 'eventReward', 'inAppPurchase']
     const sinks = ['itemBought', 'itemUpgraded', 'characterUpgraded', 'secondLifeBought']
 
-    const nodes = ['d366e616-8012-4290-aea8-b13cf6a0be90', '99bd2cf7-110e-4a14-b7a3-aa597e84d534']
+    let nodes = await NodeModel.find({ gameID: 'brawlDemo', 'branches.branch': 'development' }, { 'branches.$': 1 }).lean()
+    nodes = nodes[0].branches[0].planningTypes.find(t => t.type === 'entity').nodes
+    nodes = nodes.filter(n => n.entityBasic && n.entityBasic.isCurrency).map(n => n.nodeID)
 
     function getRandomNodeID() {
       return nodes[randomNumberInRange(0, nodes.length - 1)]
     }
 
     let icons = await fetchEntityIcons(gameID, branchName, nodes)
+    let fetchedAvgProfile = await generateAvgProfile({gameID, branchName, filterSegments, salesCount: 400})
+
 
     let responseData = {
       sources: 
@@ -8478,156 +8324,7 @@ app.post('/api/analytics/getSourcesAndSinks', async (req, res) => {
             total: randomNumberInRange(100, 10000),
             players: randomNumberInRange(1000, 7000),
             currencyEntity: getRandomNodeID(),
-            avgProfile: [
-              {
-                name: 'Game Level',
-                value: '4',
-                templateID: '1',
-                players: 321,
-                subProfiles: [
-                  {
-                    value: '3',
-                    players: 120,
-                  },
-                  {
-                    value: '2',
-                    players: 56,
-                  },
-                  {
-                    value: '1',
-                    players: 21,
-                  },
-                ]
-              },
-              {
-                name: 'Fav. Char',
-                value: 'Leon',
-                templateID: '2',
-                players: 632,
-                subProfiles: [
-                  {
-                    value: 'Shelly',
-                    players: 120,
-                  },
-                  {
-                    value: 'Bull',
-                    players: 56,
-                  },
-                  {
-                    value: 'Crow',
-                    players: 21,
-                  },
-                ]
-              },
-              {
-                name: 'Winrate',
-                value: '64%',
-                templateID: '3',
-                players: 345,
-                subProfiles: [
-                  {
-                    value: '63%',
-                    players: 341,
-                  },
-                  {
-                    value: '62%',
-                    players: 334,
-                  },
-                  {
-                    value: '61%',
-                    players: 234,
-                  },
-                ]
-              },
-              {
-                name: 'Retention',
-                value: 'D0',
-                templateID: '4',
-                players: 1231,
-                subProfiles: [
-                  {
-                    value: 'D3',
-                    players: 120,
-                  },
-                  {
-                    value: 'D2',
-                    players: 56,
-                  },
-                  {
-                    value: 'D1',
-                    players: 21,
-                  },
-                ]
-              },
-              {
-                name: 'Country',
-                value: 'USA',
-                templateID: '5',
-                players: 1231,
-                subProfiles: [
-                  {
-                    value: 'France',
-                    players: 564,
-                  },
-                  {
-                    value: 'Canada',
-                    players: 341,
-                  },
-                  {
-                    value: 'Germany',
-                    players: 234,
-                  },
-                ]
-              },
-              {
-                name: 'Total Summ Spent',
-                value: '$34',
-                templateID: '6',
-                players: 561,
-                subProfiles: [
-                  {
-                    value: '$54',
-                    players: 120,
-                  },
-                  {
-                    value: '$45',
-                    players: 56,
-                  },
-                  {
-                    value: '$76',
-                    players: 21,
-                  },
-                ]
-              },
-              {
-                name: 'IAP bought times',
-                value: '1',
-                templateID: '7',
-                players: 456,
-                subProfiles: [
-                  {
-                    value: '2',
-                    players: 120,
-                  },
-                  {
-                    value: '3',
-                    players: 56,
-                  },
-                  {
-                    value: '4',
-                    players: 21,
-                  },
-                ]
-              },
-              {
-                name: 'Segment',
-                value: 'New player',
-                templateID: '8',
-                players: 2312,
-                subProfiles: [
-                ]
-              },
-            ],
+            avgProfile: fetchedAvgProfile,
           }
         ))
       ,
@@ -8639,179 +8336,34 @@ app.post('/api/analytics/getSourcesAndSinks', async (req, res) => {
             total: randomNumberInRange(100, 10000),
             players: randomNumberInRange(1000, 7000),
             currencyEntity: getRandomNodeID(),
-            avgProfile: [
-              {
-                name: 'Game Level',
-                value: '4',
-                templateID: '1',
-                players: 321,
-                subProfiles: [
-                  {
-                    value: '3',
-                    players: 120,
-                  },
-                  {
-                    value: '2',
-                    players: 56,
-                  },
-                  {
-                    value: '1',
-                    players: 21,
-                  },
-                ]
-              },
-              {
-                name: 'Fav. Char',
-                value: 'Leon',
-                templateID: '2',
-                players: 632,
-                subProfiles: [
-                  {
-                    value: 'Shelly',
-                    players: 120,
-                  },
-                  {
-                    value: 'Bull',
-                    players: 56,
-                  },
-                  {
-                    value: 'Crow',
-                    players: 21,
-                  },
-                ]
-              },
-              {
-                name: 'Winrate',
-                value: '64%',
-                templateID: '3',
-                players: 345,
-                subProfiles: [
-                  {
-                    value: '63%',
-                    players: 341,
-                  },
-                  {
-                    value: '62%',
-                    players: 334,
-                  },
-                  {
-                    value: '61%',
-                    players: 234,
-                  },
-                ]
-              },
-              {
-                name: 'Retention',
-                value: 'D0',
-                templateID: '4',
-                players: 1231,
-                subProfiles: [
-                  {
-                    value: 'D3',
-                    players: 120,
-                  },
-                  {
-                    value: 'D2',
-                    players: 56,
-                  },
-                  {
-                    value: 'D1',
-                    players: 21,
-                  },
-                ]
-              },
-              {
-                name: 'Country',
-                value: 'USA',
-                templateID: '5',
-                players: 1231,
-                subProfiles: [
-                  {
-                    value: 'France',
-                    players: 564,
-                  },
-                  {
-                    value: 'Canada',
-                    players: 341,
-                  },
-                  {
-                    value: 'Germany',
-                    players: 234,
-                  },
-                ]
-              },
-              {
-                name: 'Total Summ Spent',
-                value: '$34',
-                templateID: '6',
-                players: 561,
-                subProfiles: [
-                  {
-                    value: '$54',
-                    players: 120,
-                  },
-                  {
-                    value: '$45',
-                    players: 56,
-                  },
-                  {
-                    value: '$76',
-                    players: 21,
-                  },
-                ]
-              },
-              {
-                name: 'IAP bought times',
-                value: '1',
-                templateID: '7',
-                players: 456,
-                subProfiles: [
-                  {
-                    value: '2',
-                    players: 120,
-                  },
-                  {
-                    value: '3',
-                    players: 56,
-                  },
-                  {
-                    value: '4',
-                    players: 21,
-                  },
-                ]
-              },
-              {
-                name: 'Segment',
-                value: 'New player',
-                templateID: '8',
-                players: 2312,
-                subProfiles: [
-                ]
-              },
-            ],
+            avgProfile: fetchedAvgProfile,
           }
         ))
       ,
+    }
+
+    function getIconByEntityNodeID(entityNodeID) {
+      let icon = icons.find(n => n.nodeID === entityNodeID)
+      if (icon) {
+        return icon.icon
+      } else {
+        return ''
+      }
     }
 
     responseData = {
       sources: 
         responseData.sources.map(source => ({
           ...source,
-          entityIcon: icons.find(n => n.nodeID === source.currencyEntity).icon,
+          entityIcon: getIconByEntityNodeID(source.currencyEntity),
         })),
       sinks: 
         responseData.sinks.map(sink => ({
           ...sink,
-          entityIcon: icons.find(n => n.nodeID === sink.currencyEntity).icon,
+          entityIcon: getIconByEntityNodeID(sink.currencyEntity),
         })),
     }
-
-    if (true) {
-      res.status(200).json({success: true, data: responseData})
-    } else{
-      res.status(200).json({success: false, message: 'Internal Server Error or No Data'})
-    }
+    res.status(200).json({success: true, data: responseData})
 
   } catch (error) {
     console.log(error)
@@ -10142,10 +9694,107 @@ app.post('/api/analytics/getAdsImpressionsDetailed', async (req, res) => {
 
 
 });
+
+async function generateAvgProfile({
+  gameID, 
+  branchName, 
+  filterSegments = [], 
+  skipSubprofiles = false,
+  salesCount = 100,
+}) {
+
+  if (!gameID || !branchName) {
+    return []
+  }
+  let templates = await PWtemplates.find({ gameID, 'branches.branch': branchName }, { 'branches.$': 1 })
+  if (templates.length === 0) {
+    return []
+  }
+  templates = templates[0].branches[0].templates
+
+  const templateNames = []
+  .concat(templates.analytics.map(template => ({name: template.templateName, id: template.templateID})))
+  .concat(templates.statistics.map(template => ({name: template.templateName, id: template.templateID})))
+
+
+  const segments = ['everyone', ...filterSegments]
+
+  function getSampleSize(totalSampleSize, confidenceLevel) {
+    const n = totalSampleSize;
+
+    const expectedProportion = 0.5;
+    const marginOfError = 0.05;
+
+    const z = confidenceLevel === 0.95 ? 1.96 : 2.58;
+
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    let sampleSize = Math.ceil(Math.pow((z * Math.sqrt(expectedProportion * (1 - expectedProportion))) / marginOfError, 2));
+    sampleSize = clamp(sampleSize, 1, n);
+
+    return sampleSize;
+  }
+
+  const sampleSize = getSampleSize(salesCount, 0.999)
+  
+  let players = await PWplayers.find({ 
+    gameID, branch: branchName, segments: {$in: segments},
+    'elements.analytics': {$elemMatch: {elementID: 'totalPaymentsCount', elementValue: {$gt: 0}}}
+   }).limit(sampleSize).lean()
+  
+  let elementData = {};
+
+  for (let player of players) {
+    let elements = [].concat(player.elements.analytics, player.elements.statistics);
+    
+    for (let element of elements) {
+      let { elementID, elementValue } = element;
+
+      if (!elementData[elementID]) {
+        elementData[elementID] = {
+          name: templateNames.find(t => t.id === elementID)?.name || elementID,
+          templateID: elementID,
+          totalPlayers: 0,
+          subProfiles: {}
+        };
+      }
+
+      elementData[elementID].totalPlayers++;
+      
+      if (!elementData[elementID].subProfiles[elementValue]) {
+        elementData[elementID].subProfiles[elementValue] = {
+          value: elementValue,
+          players: 0
+        };
+      }
+      
+      elementData[elementID].subProfiles[elementValue].players++;
+    }
+  }
+
+  let avgProfile = Object.values(elementData).map(element => {
+    let maxSubProfile = Object.values(element.subProfiles).reduce((a, b) => (a.players > b.players ? a : b));
+    let subProfiles = Object.values(element.subProfiles).filter(subProfile => subProfile.value !== maxSubProfile.value);
+    return {
+      name: element.name,
+      value: maxSubProfile.value,
+      templateID: element.templateID,
+      players: maxSubProfile.players,
+      subProfiles: skipSubprofiles ? [] : subProfiles
+    };
+  });
+  return avgProfile;
+}
+
+
+
 app.post('/api/analytics/getOffersDataTableWithProfile', async (req, res) => {
   const { gameID, branch, filterDate, filterSegments, priceType } = req.body;
 
   try {
+
     let offers = await Offers.aggregate([
         { $match: { gameID } }, 
         { $unwind: "$branches" }, 
@@ -10157,161 +9806,15 @@ app.post('/api/analytics/getOffersDataTableWithProfile', async (req, res) => {
 
     offers = offers.filter(offer => offer.offerPrice.targetCurrency === priceType)
 
+    let sales = priceType === 'entity' ? randomNumberInRange(1000, 10000)*130 : randomNumberInRange(1000, 10000)
+    let fetchedAvgProfile = await generateAvgProfile({gameID, branchName: branch, filterSegments, salesCount: sales})
+
     offers = offers.map(offer => {
       let temp = {
         ...offer,
-        sales: priceType === 'entity' ? randomNumberInRange(1000, 10000)*130 : randomNumberInRange(1000, 10000),
+        sales: sales,
         revenue: priceType === 'entity' ? randomNumberInRange(1000, 10000)*600 : randomNumberInRange(2000, 10000),
-        avgProfile: [
-          {
-            name: 'Game Level',
-            value: '4',
-            templateID: '1',
-            players: 321,
-            subProfiles: [
-              {
-                value: '3',
-                players: 120,
-              },
-              {
-                value: '2',
-                players: 56,
-              },
-              {
-                value: '1',
-                players: 21,
-              },
-            ]
-          },
-          {
-            name: 'Fav. Char',
-            value: 'Leon',
-            templateID: '2',
-            players: 632,
-            subProfiles: [
-              {
-                value: 'Shelly',
-                players: 120,
-              },
-              {
-                value: 'Bull',
-                players: 56,
-              },
-              {
-                value: 'Crow',
-                players: 21,
-              },
-            ]
-          },
-          {
-            name: 'Winrate',
-            value: '64%',
-            templateID: '3',
-            players: 345,
-            subProfiles: [
-              {
-                value: '63%',
-                players: 341,
-              },
-              {
-                value: '62%',
-                players: 334,
-              },
-              {
-                value: '61%',
-                players: 234,
-              },
-            ]
-          },
-          {
-            name: 'Retention',
-            value: 'D0',
-            templateID: '4',
-            players: 1231,
-            subProfiles: [
-              {
-                value: 'D3',
-                players: 120,
-              },
-              {
-                value: 'D2',
-                players: 56,
-              },
-              {
-                value: 'D1',
-                players: 21,
-              },
-            ]
-          },
-          {
-            name: 'Country',
-            value: 'USA',
-            templateID: '5',
-            players: 1231,
-            subProfiles: [
-              {
-                value: 'France',
-                players: 564,
-              },
-              {
-                value: 'Canada',
-                players: 341,
-              },
-              {
-                value: 'Germany',
-                players: 234,
-              },
-            ]
-          },
-          {
-            name: 'Total Summ Spent',
-            value: '$34',
-            templateID: '6',
-            players: 561,
-            subProfiles: [
-              {
-                value: '$54',
-                players: 120,
-              },
-              {
-                value: '$45',
-                players: 56,
-              },
-              {
-                value: '$76',
-                players: 21,
-              },
-            ]
-          },
-          {
-            name: 'IAP bought times',
-            value: '1',
-            templateID: '7',
-            players: 456,
-            subProfiles: [
-              {
-                value: '2',
-                players: 120,
-              },
-              {
-                value: '3',
-                players: 56,
-              },
-              {
-                value: '4',
-                players: 21,
-              },
-            ]
-          },
-          {
-            name: 'Segment',
-            value: 'New player',
-            templateID: '8',
-            players: 2312,
-            subProfiles: [
-            ]
-          },
-        ],
+        avgProfile: fetchedAvgProfile
       }
       if (priceType === 'entity') {
         temp.entityNodeID = offer.offerPrice.nodeID
@@ -10346,9 +9849,12 @@ app.post('/api/analytics/getFirstPaymentConversionTime', async (req, res) => {
   }
 });
 app.post('/api/analytics/getPaymentConversion', async (req, res) => {
-  const { gameID, branch, filterDate, filterSegments } = req.body;
+  const { gameID, branchName, filterDate, filterSegments } = req.body;
 
   try {
+
+    let sales = randomNumberInRange(1000, 10000)
+    let fetchedAvgProfile = await generateAvgProfile({gameID, branchName, filterSegments, salesCount: sales})
 
     let randPayments = randomNumberInRange(1, 23);
     let responseData = await generateRandomDataByNumber(1, randPayments, 4000, 10000, -0.5, 0, 0, 'payment', 'players')
@@ -10357,157 +9863,8 @@ app.post('/api/analytics/getPaymentConversion', async (req, res) => {
       meanPayment: randomNumberInRange(1, 15, true),
       meanDaysToConvert: randomNumberInRange(1, 5),
       revenue: randomNumberInRange(1000, 10000),
-      sales: randomNumberInRange(1000, 10000),
-      avgProfile: [
-      {
-        name: 'Game Level',
-        value: '4',
-        templateID: '1',
-        players: 321,
-        subProfiles: [
-          {
-            value: '3',
-            players: 120,
-          },
-          {
-            value: '2',
-            players: 56,
-          },
-          {
-            value: '1',
-            players: 21,
-          },
-        ]
-      },
-      {
-        name: 'Fav. Char',
-        value: 'Leon',
-        templateID: '2',
-        players: 632,
-        subProfiles: [
-          {
-            value: 'Shelly',
-            players: 120,
-          },
-          {
-            value: 'Bull',
-            players: 56,
-          },
-          {
-            value: 'Crow',
-            players: 21,
-          },
-        ]
-      },
-      {
-        name: 'Winrate',
-        value: '64%',
-        templateID: '3',
-        players: 345,
-        subProfiles: [
-          {
-            value: '63%',
-            players: 341,
-          },
-          {
-            value: '62%',
-            players: 334,
-          },
-          {
-            value: '61%',
-            players: 234,
-          },
-        ]
-      },
-      {
-        name: 'Retention',
-        value: 'D0',
-        templateID: '4',
-        players: 1231,
-        subProfiles: [
-          {
-            value: 'D3',
-            players: 120,
-          },
-          {
-            value: 'D2',
-            players: 56,
-          },
-          {
-            value: 'D1',
-            players: 21,
-          },
-        ]
-      },
-      {
-        name: 'Country',
-        value: 'USA',
-        templateID: '5',
-        players: 1231,
-        subProfiles: [
-          {
-            value: 'France',
-            players: 564,
-          },
-          {
-            value: 'Canada',
-            players: 341,
-          },
-          {
-            value: 'Germany',
-            players: 234,
-          },
-        ]
-      },
-      {
-        name: 'Total Summ Spent',
-        value: '$34',
-        templateID: '6',
-        players: 561,
-        subProfiles: [
-          {
-            value: '$54',
-            players: 120,
-          },
-          {
-            value: '$45',
-            players: 56,
-          },
-          {
-            value: '$76',
-            players: 21,
-          },
-        ]
-      },
-      {
-        name: 'IAP bought times',
-        value: '1',
-        templateID: '7',
-        players: 456,
-        subProfiles: [
-          {
-            value: '2',
-            players: 120,
-          },
-          {
-            value: '3',
-            players: 56,
-          },
-          {
-            value: '4',
-            players: 21,
-          },
-        ]
-      },
-      {
-        name: 'Segment',
-        value: 'New player',
-        templateID: '8',
-        players: 2312,
-        subProfiles: [
-        ]
-      },
-      ],
+      sales: sales,
+      avgProfile: fetchedAvgProfile,
     }))
 
     res.status(200).json({ success: true, responseData });
@@ -10613,6 +9970,8 @@ app.post('/api/analytics/getOfferAnalytics', async (req, res) => {
   const {gameID, branchName, offerID} = req.body
 
   try {
+    let fetchedAvgProfile1 = await generateAvgProfile({gameID, branchName, filterSegments: [], skipSubprofiles: true, salesCount: 9821})
+    let fetchedAvgProfile2 = await generateAvgProfile({gameID, branchName, filterSegments: [], salesCount: 9821})
 
     const responseData = {
         revenue: 1346200,
@@ -10623,145 +9982,8 @@ app.post('/api/analytics/getOfferAnalytics', async (req, res) => {
         salesTotalPositive: true,
         impressions: 121021,
         impressionsPositive: true,
-        avgProfile: [
-          {
-            name: 'Game Level',
-            value: '4',
-            templateID: '1',
-            players: 321,
-          },
-          {
-            name: 'Fav. Char',
-            value: 'Leon',
-            templateID: '2',
-            players: 632,
-          },
-          {
-            name: 'Winrate',
-            value: '64%',
-            templateID: '3',
-            players: 345,
-          },
-          {
-            name: 'Retention',
-            value: '4',
-            templateID: '4',
-            players: 1231,
-          },
-          {
-            name: 'Country',
-            value: 'USA',
-            templateID: '5',
-            players: 1231,
-          },
-          {
-            name: 'Total Summ Spent',
-            value: '$341',
-            templateID: '6',
-            players: 561,
-          },
-          {
-            name: 'IAP bought times',
-            value: '12',
-            templateID: '7',
-            players: 456,
-          },
-          {
-            name: 'Segment',
-            value: 'New player',
-            templateID: '8',
-            players: 2312,
-          },
-        ],
-        profile: [
-          {
-            name: 'Game Level',
-            value: '4',
-            players: 461,
-            subProfile: [
-              {
-                name: 'Fav. Char',
-                value: 'Leon',
-                players: 461,
-                subProfile: [
-                  {
-                    name: 'Fav. Char',
-                    value: 'Crow',
-                    players: 123,
-                  },
-                  {
-                    name: 'Fav. Char',
-                    value: 'Bull',
-                    players: 53,
-                  },
-                ]
-              },
-              {
-                name: 'Lose Streak',
-                value: 'Lilith',
-                players: 123,
-                subProfiles: [
-                  {
-                    name: 'Lose Streak',
-                    value: 'Crow',
-                    players: 123,
-                  },
-                ]
-              },
-              {
-                name: 'Fav. Char',
-                value: 'Tanya',
-                players: 252,
-                subProfiles: [
-                ]
-              },
-            ]
-          },
-          {
-            name: 'Fav. Char',
-            value: 'Leon',
-            players: 7974,
-            subProfile: [
-              {
-                name: 'Fav. Char',
-                value: 'Crow',
-                players: 461,
-                subProfile: [
-                  {
-                    name: 'Fav. Char',
-                    value: 'Shelly',
-                    players: 123,
-                  },
-                  {
-                    name: 'Fav. Char',
-                    value: 'Bull',
-                    players: 53,
-                  },
-                ]
-              },
-              {
-                name: 'Lose Streak',
-                value: '4',
-                players: 243,
-                subProfiles: [
-                  {
-                    name: 'Lose Streak',
-                    value: '3',
-                    players: 121,
-                  },
-                ]
-              },
-              {
-                name: 'Fav. Char',
-                value: 'Tanya',
-                players: 252,
-                subProfiles: [
-                ]
-              },
-            ]
-          }
-
-        ],
+        avgProfile: fetchedAvgProfile1,
+        profile: fetchedAvgProfile2,
         sales: [
           {
             date: '2023-01-01',
