@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.12.5
+2024-05-23
+
+### Fixes
+
+- profile composition query optimization & offer api fixes (335d3837577d1647a981a71ef4bde72217e443bb)
+
 ## 1.12.4
 2024-05-22
 
