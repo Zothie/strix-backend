@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.12.6
+2024-05-23
+
+### Fixes
+
+- naming issue for firebase admin (b64fc3a5b8d81606a98b3d67f8037db9a272f37d)
+
 ## 1.12.5
 2024-05-23
 
