@@ -17,7 +17,7 @@ import { Schema, model } from 'mongoose';
     },
 
     offerSegments: [String],
-    offerTriggers: [String],
+    offerTriggers: Array,
 
     offerPrice: {
       targetCurrency: String,

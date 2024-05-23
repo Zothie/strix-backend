@@ -3836,6 +3836,8 @@ app.post('/api/updateOffer', async (req, res) => {
   const { gameID, branch, offerObj } = req.body;
   try {
     // content, price-moneyCurr, triggers fields must be stringified from JSON
+
+    console.log(offerObj)
     
     const offer = {
       offerID: offerObj.offerId,
@@ -9368,13 +9370,23 @@ app.post('/api/analytics/getProfileComposition', async (req, res) => {
     }
     const query = await buildQuery()
 
-    // Finding the total count of filtered players
-    const totalCount = await PWplayers.find(query).count()
-    // console.log('totalCount', totalCount)
+    const result = await PWplayers.aggregate([
+      { $match: query },
+      { $facet: {
+          totalCount: [{ $count: "count" }],
+          players: [{ $limit: sampleSize }]
+        }
+      }
+    ]);
 
     // Making the sample
-    let players
-    players = await PWplayers.find(query).limit(sampleSize).lean()
+    const totalCount = result[0].totalCount[0] ? result[0].totalCount[0].count : 0;
+    // await PWplayers.find(query).count()
+
+    let players = result[0].players
+    // players = await PWplayers.find(query).limit(sampleSize).lean()
+
+    // console.log('players', players, totalCount)
 
 
   function getSampleSize(totalSampleSize, confidenceLevel) {
@@ -11184,7 +11196,7 @@ async function populatePlayerWarehouse_brawlDemo(gameID, branchName) {
   }
 
   const totalBatches = 10;
-  const batchSize = 10000;
+  const batchSize = 100000;
 
   const res = await PWplayers.deleteMany({gameID, branch: branchName})
   console.log('Deleted players', res)
@@ -11239,7 +11251,7 @@ async function testFunctionPW() {
   // });
   // console.log('playerWarehouse', playerWarehouse)
 }
-testFunctionPW()
+// testFunctionPW()
 
 async function populateElements(gameID, branchName) {
   await PWtemplates.findOneAndUpdate(
