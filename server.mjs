@@ -112,7 +112,7 @@ app.post('/api/register', async (req, res) => {
     const newUser = new User({ email, password });
     await newUser.save();
 
-    admin.auth()
+    firebase.auth()
       // Serve email as uid
       .createCustomToken(email)
       .then((customToken) => {
@@ -138,7 +138,7 @@ app.post('/api/login', async (req, res) => {
 
       if (isPasswordMatch) {
 
-        admin.auth()
+        firebase.auth()
         // Serve email as uid
         .createCustomToken(email)
         .then((customToken) => {
@@ -162,13 +162,13 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/logout', async (req, res) => {
   const { token } = req.body;
 
- admin.auth().verifyIdToken(token)
+ firebase.auth().verifyIdToken(token)
  .then((decodedToken) => {
    // Verify user after verifying token
    const uid = decodedToken.uid;
 
    // Force revoke user
-   admin.auth().revokeRefreshTokens(uid)
+   firebase.auth().revokeRefreshTokens(uid)
      .then(() => {
        res.status(200).send('User logged out successfully');
      })
