@@ -7,7 +7,7 @@ const segmentSchema = new Schema({
   },
   segmentName: String,
   segmentComment: String,
-  segmentConditions: String,
+  segmentConditions: Array,
   segmentPlayerCount: Number,
   segmentPlayerIDs: [String]
 });

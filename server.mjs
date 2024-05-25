@@ -137,7 +137,6 @@ app.post('/api/login', async (req, res) => {
       const isPasswordMatch = password === user.password;
 
       if (isPasswordMatch) {
-
         firebase.auth()
         // Serve email as uid
         .createCustomToken(email)
@@ -1530,7 +1529,6 @@ app.post('/api/createEntityBulk', async (req, res) => {
 
     newNodes.forEach(e => {
       async function tryToAddEntityToParent(entityObj) {
-        console.log('Adding entity:', entityObj, 'Params:', gameID, branch, entityObj, entityObj.nodeID)
         // If not empty, it is basic entity. Category otherwise
         if (entityObj.entityBasic && entityObj.entityBasic.entityID !== '') {
           // Trying to put it under parent category immediately
@@ -1823,14 +1821,14 @@ async function removeAnalyticsTemplatesByEventID(gameID, branchName, eventIDs) {
       { gameID, 'branches.branch': branchName },
       { $pull: { 'branches.$[].templates.analytics': { templateAnalyticEventID: { $in: eventIDs } } } }
     );
-    console.log('Удалено шаблонов:', result.modifiedCount);
+    console.log('Removed templates:', result.modifiedCount);
 
     // Удаление соответствующих условий из Segments
     if (templateIDs.length > 0) {
       await removeConditionsFromSegments(gameID, branchName, templateIDs);
     }
   } catch (error) {
-    console.error('Ошибка при удалении шаблонов аналитики:', error);
+    console.error('Error removing analytics templates:', error);
   }
 }
 // Clearing all segments' conditions that are dependent on removed template from PW
@@ -1873,7 +1871,7 @@ async function removeConditionsFromSegments(gameID, branchName, templateIDs) {
       };
 
       await Segments.updateMany(query, update, options);
-      console.log('Объекты с conditionElementID:', templateID, 'удалены успешно.');
+      console.log('Objects with conditionElementID:', templateID, 'removed successfully.');
     });
     await Promise.all(promises);
 
@@ -11199,20 +11197,20 @@ async function populatePlayerWarehouse_brawlDemo(gameID, branchName) {
   const batchSize = 100000;
 
   const res = await PWplayers.deleteMany({gameID, branch: branchName})
-  console.log('Deleted players', res)
+  // console.log('Deleted players', res)
 
-  console.log('Generating players for PW. Batch size: ' + batchSize + ', total batches: ' + totalBatches);
+  // console.log('Generating players for PW. Batch size: ' + batchSize + ', total batches: ' + totalBatches);
   for (let i = 0; i < totalBatches; i++) {
     const playerPromises = Array.from({ length: batchSize }, () => generatePlayer());
     const players = await Promise.all(playerPromises);
     
-    console.log('Populated player warehouse, saving')
+    // console.log('Populated player warehouse, saving')
     try {
       await PWplayers.collection.insertMany(players)
     } catch (error) {
       console.log('Error inserting players:', error)
     }
-    console.log('Saved')
+    // console.log('Saved')
   }
 
 
@@ -11221,12 +11219,12 @@ async function populatePlayerWarehouse_brawlDemo(gameID, branchName) {
   branch.segments.forEach(segment => {
     segment.segmentPlayerCount = segmentCounts[segment.segmentID]
   })
-  console.log('Populated segments, saving')
+  // console.log('Populated segments, saving')
   await segments.save()
 
   
   
-  console.log('Populated database')
+  // console.log('Populated database')
 
 }
 async function hardPopulation() {
