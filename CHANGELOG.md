@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.12.7
+2024-05-25
+
+### Fixes
+
+- changed segment model (852d59a0e79fc84fd8944a3f65fed7e6e1b9c6d3)
+
 ## 1.12.6
 2024-05-23
 
