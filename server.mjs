@@ -22,6 +22,7 @@ const app = express();
 const port = 3001;
 const host = '0.0.0.0'
 const mongoURI = process.env.MONGODB_URI;
+const demoGames = ['brawlDemo']
 
 app.use(express.json({limit: '50mb'}));
 app.use(express.urlencoded({limit: '50mb'}));
@@ -183,6 +184,16 @@ app.post('/api/logout', async (req, res) => {
  });
 });
 
+function processGameID(gameID) {
+  // Checking if gameID contains demo gameID at the start
+  for (const demoGameID of demoGames) {
+    if (gameID.startsWith(demoGameID)) {
+      return demoGameID;
+    }
+  }
+  return gameID;
+}
+
 app.post('/api/finishInitialOnboarding', async (req, res) => {
   const { publisherName, email, username, jobTitle, studioName, studioApiKey, studioIcon } = req.body;
 
@@ -207,130 +218,7 @@ app.post('/api/finishInitialOnboarding', async (req, res) => {
       publisher.studios.push({ studioID });
       await publisher.save();
 
-
-      async function createDemoGame() {
-            // const demoGameID = `demoGame`;
-            const demoGameID = `a5f10dcc-84e2-4c7d-90eb-37f172131396`;
-
-            const newGameID = `demoGame_${uuid()}`;
-
-            const demoGame = await Game.findOne({ gameID: demoGameID });
-            const newGame = new Game({
-              gameID: newGameID,
-              gameName: demoGame.gameName,
-              gameEngine: demoGame.gameEngine,
-              gameIcon: demoGame.gameIcon,
-              gameSecretKey: uuid(),
-            });
-            await newGame.save();
-          
-            const updatedStudio = await Studio.findOneAndUpdate(
-              { studioID: studioID },
-              { $push: { games: { gameID: newGameID } } },
-              { new: true }
-            );
-          
-            //
-            //
-            // Populating existing collestions with new game
-            //
-            //
-            // Creating new game doc in NodeModel
-            const demoNodeModel = NodeModel.findOne({ gameID: demoGameID });
-            const newNodeModel = new NodeModel({
-              gameID: newGameID,
-              ...demoNodeModel
-            });
-            await newNodeModel.save();
-          
-            // Creating new game doc in AnalyticsEvents
-            const demoAnalyticsEvents = AnalyticsEvents.findOne({ gameID: demoGameID });
-            const newAnalyticsEvents = new AnalyticsEvents({
-              gameID: newGameID,
-              ...demoAnalyticsEvents
-            });
-            await newAnalyticsEvents.save();
-          
-            // Creating new game doc in PlayerWarehouse
-            const demoPWplayers = PWplayers.aggregate([
-              { $match: { gameID: demoGameID } },
-              { $group: { _id: null, players: { $push: '$$ROOT' } } },
-            ]);
-            await PWplayers.collection.insertMany({
-              gameID: newGameID,
-              ...demoPWplayers,
-            });
-
-            const demoPWtemplates = PWtemplates.findOne({ gameID: demoGameID });
-            const newPWtemplates = new PWtemplates({
-              gameID: newGameID,
-              ...demoPWtemplates
-            });
-            await newPWtemplates.save();
-          
-            // Creating new game doc in RemoteConfig
-            const demoRemoteConfig = RemoteConfig.findOne({ gameID: demoGameID });
-            const newRemoteConfig = new RemoteConfig({
-              gameID: newGameID,
-              ...demoRemoteConfig
-            });
-            await newRemoteConfig.save();
-          
-            // Creating new game doc in Segments
-            const demoSegments = Segments.findOne({ gameID: demoGameID });
-            const newSegments = new Segments({
-              gameID: newGameID,
-              ...demoSegments
-            });
-            await newSegments.save();
-          
-            // Creating new game doc in Planning Tree
-            const demoTree = PlanningTreeModel.findOne({ gameID: demoGameID });
-            const newTree = {
-              gameID: newGameID,
-              ...demoTree
-            };
-            await PlanningTreeModel.create(newTree);
-          
-            // Creating new game doc in Relations
-            const demoRelations = Relations.findOne({ gameID: demoGameID });
-            const newRelations = new Relations({
-              gameID: newGameID,
-              ...demoRelations
-            });
-            await newRelations.save();
-          
-            // Creating new game doc in Localization
-            const demoLocalization = Localization.findOne({ gameID: demoGameID });
-            const newLocalization = new Localization({
-              gameID: newGameID,
-              ...demoLocalization
-            });
-            await newLocalization.save();
-          
-            const demoOffers = Offers.findOne({ gameID: demoGameID });
-            const newOffers = new Offers({
-              gameID: newGameID,
-              ...demoOffers
-            });
-            await newOffers.save();
-          
-            const demoCustomCharts = CustomCharts.findOne({ gameID: demoGameID });
-            const newCustomCharts = new CustomCharts({
-              gameID: newGameID,
-              ...demoCustomCharts
-            });
-            await newCustomCharts.save();
-
-            const demoABTests = ABTests.findOne({ gameID: demoGameID });
-            const newABTests = new ABTests({
-              gameID: newGameID,
-              ...demoABTests
-            });
-            await newABTests.save();
-      }
-      // createDemoGame()
-
+      createDemoGame('brawlDemo', studioID)
 
       res.status(200).json({
         success: true,
@@ -346,6 +234,185 @@ app.post('/api/finishInitialOnboarding', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+async function createDemoGame(demoGameID, studioID) {
+
+  const newGameID = `${demoGameID}_${uuid()}`;
+
+  const demoGame = await Game.findOne({ gameID: demoGameID });
+  const newGame = new Game({
+    gameID: newGameID,
+    gameName: demoGame.gameName,
+    gameEngine: demoGame.gameEngine,
+    gameIcon: demoGame.gameIcon,
+    gameSecretKey: uuid(),
+  });
+  await newGame.save();
+
+  await Studio.findOneAndUpdate(
+    { studioID: studioID },
+    { $push: { games: { gameID: newGameID } } },
+    { new: true }
+  );
+
+  //
+  //
+  // Populating existing collestions with new game
+  //
+  //
+  // Creating new game doc in NodeModel
+  const demoNodeModel = await NodeModel.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newNodeModel = new NodeModel({
+    ...demoNodeModel,
+    gameID: newGameID,
+  });
+  await newNodeModel.save();
+
+  // Creating new game doc in AnalyticsEvents
+  const demoAnalyticsEvents = await AnalyticsEvents.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newAnalyticsEvents = new AnalyticsEvents({
+    ...demoAnalyticsEvents,
+    gameID: newGameID,
+  });
+  await newAnalyticsEvents.save();
+
+  // // Creating new game doc in PlayerWarehouse
+  // const demoPWplayers = PWplayers.aggregate([
+  //   { $match: { gameID: demoGameID } },
+  //   { $group: { _id: null, players: { $push: '$$ROOT' } } },
+  // ]);
+  // await PWplayers.collection.insertMany({
+  //   gameID: newGameID,
+  //   ...demoPWplayers,
+  // });
+
+  const demoPWtemplates = await PWtemplates.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newPWtemplates = new PWtemplates({
+    ...demoPWtemplates,
+    gameID: newGameID,
+  });
+  await newPWtemplates.save();
+
+  // Creating new game doc in RemoteConfig
+  const demoRemoteConfig = await RemoteConfig.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newRemoteConfig = new RemoteConfig({
+    gameID: newGameID,
+    ...demoRemoteConfig,
+  });
+  await newRemoteConfig.save();
+
+  // Creating new game doc in Segments
+  const demoSegments = await Segments.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newSegments = new Segments({
+    ...demoSegments,
+    gameID: newGameID,
+  });
+  await newSegments.save();
+
+  // Creating new game doc in Planning Tree
+  const demoTree = await PlanningTreeModel.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newTree = {
+    gameID: newGameID,
+    ...demoTree,
+  };
+  await PlanningTreeModel.create(newTree);
+
+  // Creating new game doc in Relations
+  const demoRelations = await Relations.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newRelations = new Relations({
+    ...demoRelations,
+    gameID: newGameID,
+  });
+  await newRelations.save();
+
+  // Creating new game doc in Localization
+  const demoLocalization = await Localization.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newLocalization = new Localization({
+    ...demoLocalization,
+    gameID: newGameID,
+  });
+  await newLocalization.save();
+
+  const demoOffers = await Offers.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newOffers = new Offers({
+    ...demoOffers,
+    gameID: newGameID,
+  });
+  await newOffers.save();
+
+  const demoCustomCharts = await CustomCharts.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newCustomCharts = new CustomCharts({
+    ...demoCustomCharts,
+    gameID: newGameID,
+  });
+  await newCustomCharts.save();
+
+  const demoABTests = await ABTests.findOne({ gameID: demoGameID }, {_id: 0}).lean();
+  const newABTests = new ABTests({
+    ...demoABTests,
+    gameID: newGameID,
+  });
+  await newABTests.save();
+}
+
+app.post('/api/buildDemo', async (req, res) => {
+  const demoUserEmail = 'demoUser_' + uuid();
+
+  const newUser = new User({ username: 'Demo User', role: 'Demo', email: demoUserEmail, password: demoUserEmail, isDemo: true });
+  await newUser.save();
+
+  const publisherID = 'demo_' + uuid();
+  const publisher = new Publisher({ publisherID, publisherName: 'Demo Publisher' });
+  const newPermission = { permission: 'read' };
+  publisher.users.push({ userID: demoUserEmail, userPermissions: [newPermission] });
+
+
+  const studioID = 'demo_' + uuid();
+  const studio = new Studio({ studioID, studioName: 'Demo Studio', apiKey: 'demo_' + uuid(), studioIcon: '' });
+  await studio.save();
+
+  publisher.studios.push({ studioID });
+  await publisher.save();
+
+  await createDemoGame('brawlDemo', studioID)
+
+  firebase.auth()
+    // Serve email as uid
+    .createCustomToken(demoUserEmail)
+    .then((customToken) => {
+      // Send token back to client
+      res.status(201).json({ success: true, token: customToken });
+    })
+    .catch((error) => {
+      console.log('Error building demo', error);
+      res.status(500).json({ success: false, error: 'Error building demo' });
+    })
+
+})
+
+async function cleanAllDemos() {
+  // Remove all demo studios, publishers and users which IDs start with demo_
+  
+  await Studio.deleteMany({ studioID: /^demo_/ })
+  await Publisher.deleteMany({ publisherID: /^demo_/ })
+  await User.deleteMany({ isDemo: true })
+  for (const demoID of demoGames) {
+    const query = { gameID: new RegExp(`^${demoID}_`) };
+    console.log('Removing demo games for:', demoID, '| Query:', query)
+    await Game.deleteMany(query);
+    await NodeModel.deleteMany(query);
+    await Segments.deleteMany(query);
+    await Relations.deleteMany(query);
+    await PWtemplates.deleteMany(query);
+    await AnalyticsEvents.deleteMany(query);
+    await RemoteConfig.deleteMany(query);
+    await PlanningTreeModel.deleteMany(query);
+    await Offers.deleteMany(query);
+    await CustomCharts.deleteMany(query);
+    await ABTests.deleteMany(query);
+    await Localization.deleteMany(query);
+  }
+}
+cleanAllDemos()
 
 // Получение списка всех паблишеров
 app.post('/api/getPublishers', async (req, res) => {
@@ -5127,7 +5194,7 @@ app.post('/api/countPlayersInWarehouse', async (req, res) => {
 
     // Поиск игроков по gameID и branchName
     const players = await PWplayers.find(
-      { gameID, branch: branchName },
+      { gameID: processGameID(gameID), branch: branchName },
     );
 
     // Если не найдены, возвращаем ошибку
@@ -5247,7 +5314,7 @@ async function refreshSegmentPlayerCount(gameID, branchName, segmentID) {
 
     // Находим всех игроков, у которых в массиве segments есть указанный segmentID
     const playersWithSegment = await PWplayers.find(
-      { gameID, branch: branchName, segments: {$in: [segmentID]} },
+      { gameID: processGameID(gameID), branch: branchName, segments: {$in: [segmentID]} },
     );
     
 
@@ -5305,7 +5372,7 @@ async function recalculateSegment(gameID, branchName, segmentID) {
       const clientIDs = response;
 
       const players = await PWplayers.find(
-        { gameID, branch: branchName, clientID: { $in: clientIDs.map(String) } },
+        { gameID: processGameID(gameID), branch: branchName, clientID: { $in: clientIDs.map(String) } },
       );
 
       // Recalculating target segment for each clientID
@@ -5527,7 +5594,7 @@ app.post('/api/getWarehousePlayers', async (req, res) => {
   try {
     // Найти документ PlayerWarehouse по gameID и branchName
     const playerWarehouse = await PWplayers.find(
-      { gameID, branch: branchName },
+      { gameID: processGameID(gameID), branch: branchName },
       { elements: 0, inventory: 0, goods: 0, abtests: 0, segments: 0, branch: 0, _id: 0, gameID: 0 },
     );
 
@@ -5553,7 +5620,7 @@ app.post('/api/getWarehousePlayerData', async (req, res) => {
   try {
     // Найти документ PlayerWarehouse по gameID и branchName
     const playerWarehouse = await PWplayers.findOne(
-      { gameID, branch: branchName, clientID },
+      { gameID: processGameID(gameID), branch: branchName, clientID },
     );
 
 
@@ -5959,7 +6026,7 @@ async function calculateInitialElementValue(gameID, branchName, template) {
         if (!clientIDs || clientIDs.length === 0) return;
 
         let players = await PWplayers.find(
-          { gameID, branch: branchName, clientID: { $in: clientIDs.map(String) } },
+          { gameID: processGameID(gameID), branch: branchName, clientID: { $in: clientIDs.map(String) } },
         );
 
         // Iterate each found client
@@ -9223,7 +9290,7 @@ let cachedWarehousePlayers = []
 async function cachePlayers(gameID, branchName) {
 
   const playerWarehouse = await PWplayers.find(
-    { gameID, branch: branchName },
+    { gameID: processGameID(gameID), branch: branchName },
   ).lean();
   if (!playerWarehouse) {
     return
@@ -9261,7 +9328,10 @@ app.post('/api/analytics/getProfileComposition', async (req, res) => {
     }
 
     // Calculating the sample size
-    let sampleSize = getSampleSize(segmentCount, 0.999)
+    let sampleSize = 0
+    if (element1 !== '' || element2 !== '' || element3 !== '') {
+      sampleSize = getSampleSize(segmentCount, 0.999)
+    }
 
     // Getting templates so we can build the query
     let warehouseTemplates = await PWtemplates.findOne({gameID, 'branches.branch': branchName})
@@ -9360,7 +9430,7 @@ app.post('/api/analytics/getProfileComposition', async (req, res) => {
         ['segments']: { $in: [baseSegment] }
       }
       const defaultQuery = {
-        gameID, 
+        gameID: processGameID(gameID), 
         branch: branchName,
       }
 
@@ -9372,7 +9442,7 @@ app.post('/api/analytics/getProfileComposition', async (req, res) => {
       { $match: query },
       { $facet: {
           totalCount: [{ $count: "count" }],
-          players: [{ $limit: sampleSize }]
+          ...sampleSize > 0 && {players: [{ $limit: sampleSize }]}
         }
       }
     ]);
@@ -9381,12 +9451,14 @@ app.post('/api/analytics/getProfileComposition', async (req, res) => {
     const totalCount = result[0].totalCount[0] ? result[0].totalCount[0].count : 0;
     // await PWplayers.find(query).count()
 
-    let players = result[0].players
+    let players = result[0].players === undefined ? [] : result[0].players
     // players = await PWplayers.find(query).limit(sampleSize).lean()
 
     // console.log('players', players, totalCount)
 
-
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
   function getSampleSize(totalSampleSize, confidenceLevel) {
     const n = totalSampleSize;
 
@@ -9395,9 +9467,7 @@ app.post('/api/analytics/getProfileComposition', async (req, res) => {
 
     const z = confidenceLevel === 0.95 ? 1.96 : 2.58;
 
-    function clamp(value, min, max) {
-      return Math.min(Math.max(value, min), max);
-    }
+    
 
     let sampleSize = Math.ceil(Math.pow((z * Math.sqrt(expectedProportion * (1 - expectedProportion))) / marginOfError, 2));
     sampleSize = clamp(sampleSize, 1, n);
@@ -9729,17 +9799,16 @@ async function generateAvgProfile({
 
   const segments = ['everyone', ...filterSegments]
 
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
   function getSampleSize(totalSampleSize, confidenceLevel) {
-    const n = totalSampleSize;
+    const n = clamp(totalSampleSize, 1, totalSampleSize);
 
     const expectedProportion = 0.5;
     const marginOfError = 0.05;
 
     const z = confidenceLevel === 0.95 ? 1.96 : 2.58;
-
-    function clamp(value, min, max) {
-      return Math.min(Math.max(value, min), max);
-    }
 
     let sampleSize = Math.ceil(Math.pow((z * Math.sqrt(expectedProportion * (1 - expectedProportion))) / marginOfError, 2));
     sampleSize = clamp(sampleSize, 1, n);
@@ -9750,7 +9819,7 @@ async function generateAvgProfile({
   const sampleSize = getSampleSize(salesCount, 0.999)
   
   let players = await PWplayers.find({ 
-    gameID, branch: branchName, segments: {$in: segments},
+    gameID: processGameID(gameID), branch: branchName, segments: {$in: segments},
     'elements.analytics': {$elemMatch: {elementID: 'totalPaymentsCount', elementValue: {$gt: 0}}}
    }).limit(sampleSize).lean()
   
@@ -9816,7 +9885,7 @@ app.post('/api/analytics/getOffersDataTableWithProfile', async (req, res) => {
 
     offers = offers.filter(offer => offer.offerPrice.targetCurrency === priceType)
 
-    let sales = priceType === 'entity' ? randomNumberInRange(1000, 10000)*130 : randomNumberInRange(1000, 10000)
+    let sales = priceType === 'entity' ? randomNumberInRange(1000, 10000)*3 : randomNumberInRange(1000, 10000)
     let fetchedAvgProfile = await generateAvgProfile({gameID, branchName: branch, filterSegments, salesCount: sales})
 
     offers = offers.map(offer => {
@@ -10164,6 +10233,7 @@ app.post('/api/analytics/getOfferSalesAndRevenue', async (req, res) => {
 
     startDate.setUTCHours(0, 0, 0, 0);
     endDate.setUTCHours(23, 59, 59, 999);
+    let deltaValue
 
     let generatedData = await generateRandomDataByDays(startDate, endDate, 80, 400, 0.1, 0.05)
     let responseData = generatedData.map(item => ({
@@ -10980,7 +11050,7 @@ async function populatePlayerWarehouse_brawlDemo(gameID, branchName) {
     let uniformRandom = d3.randomUniform(0, 1);
     let normalRandom = d3.randomNormal(5, 2);
 
-    let global_totalMatches = d3.randomNormal(500, 50)()
+    let global_totalMatches = Math.round(d3.randomNormal(500, 50)())
     let global_winrate = d3.randomNormal(0.5, 0.1)()
 
     let global_losestreak
@@ -11073,7 +11143,7 @@ async function populatePlayerWarehouse_brawlDemo(gameID, branchName) {
                 break;
     
               case 'totalPaymentsSumm':
-                tempVal = global_tpc * Math.max(1, d3.randomNormal(0.5, 1)());
+                tempVal = parseFloat((global_tpc * Math.max(1, d3.randomNormal(0.5, 1)())).toFixed(2));
                 break;
     
               case 'meanPaymentRecency':
@@ -11193,24 +11263,27 @@ async function populatePlayerWarehouse_brawlDemo(gameID, branchName) {
     return player
   }
 
-  const totalBatches = 10;
-  const batchSize = 100000;
+  const totalBatches = 100;
+  const batchSize = 10000;
 
-  const res = await PWplayers.deleteMany({gameID, branch: branchName})
-  // console.log('Deleted players', res)
+  console.log('Player generation started with totalBatches:', totalBatches, 'and batchSize:', batchSize);
 
-  // console.log('Generating players for PW. Batch size: ' + batchSize + ', total batches: ' + totalBatches);
+  const res = await PWplayers.deleteMany({gameID: processGameID(gameID), branch: branchName})
+  console.log('Deleted players', res)
+
+  console.log('Generating players for PW. Batch size: ' + batchSize + ', total batches: ' + totalBatches);
   for (let i = 0; i < totalBatches; i++) {
+    console.log('Generating batch ' + (i + 1) + ' of ' + totalBatches);
     const playerPromises = Array.from({ length: batchSize }, () => generatePlayer());
     const players = await Promise.all(playerPromises);
     
-    // console.log('Populated player warehouse, saving')
+    console.log('Populated player warehouse, saving')
     try {
       await PWplayers.collection.insertMany(players)
     } catch (error) {
       console.log('Error inserting players:', error)
     }
-    // console.log('Saved')
+    console.log('Saved')
   }
 
 
@@ -11219,12 +11292,12 @@ async function populatePlayerWarehouse_brawlDemo(gameID, branchName) {
   branch.segments.forEach(segment => {
     segment.segmentPlayerCount = segmentCounts[segment.segmentID]
   })
-  // console.log('Populated segments, saving')
+  console.log('Populated segments, saving')
   await segments.save()
 
   
   
-  // console.log('Populated database')
+  console.log('Populated database')
 
 }
 async function hardPopulation() {

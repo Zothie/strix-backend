@@ -4,4 +4,5 @@ export const User = model('User', {
     email: String,
     password: String,
     role: String,
+    isDemo: Boolean,
 });
