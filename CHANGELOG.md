@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.13.0
+2024-05-29
+
+### Features
+
+- new demo api, small fixes (d182c2edabc0748fac94e625b94234b8a5f625e4)
+
 ## 1.12.7
 2024-05-25
 
