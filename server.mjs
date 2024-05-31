@@ -11263,7 +11263,7 @@ async function populatePlayerWarehouse_brawlDemo(gameID, branchName) {
     return player
   }
 
-  const totalBatches = 100;
+  const totalBatches = 1;
   const batchSize = 10000;
 
   console.log('Player generation started with totalBatches:', totalBatches, 'and batchSize:', batchSize);
