@@ -500,7 +500,12 @@ app.post('/api/initiateChangeUserProfile', async (req, res) => {
         return res.status(500).json({ success: false, message: 'Wrong type' });
     }
     if (mail) {
-      await mailService.sendMail(mail);
+      try {
+        const sendEmail = await mailService.sendMail(mail);
+        console.log(sendEmail)
+      } catch (err) {
+        return res.status(500).json({success: false, message: "Error sending email: " + err});
+      }
       return res.status(200).json({ success: true, message: 'Sent email' });
     }
 
