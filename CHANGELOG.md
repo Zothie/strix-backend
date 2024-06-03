@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.15.0
+2024-06-03
+
+### Features
+
+- profile page API WIP (37d2bdf556c5adc5d96e6f2b59b4e222e1820725)
+
 ## 1.14.0
 2024-05-31
 
