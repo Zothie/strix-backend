@@ -5,4 +5,5 @@ export const User = model('User', {
     password: String,
     role: String,
     isDemo: Boolean,
+    avatar: String,
 });

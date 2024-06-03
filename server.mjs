@@ -15,6 +15,8 @@ import dayjs from 'dayjs';
 import jStat from 'jstat';
 import abTestResults from 'ab-test-result'
 import * as d3 from 'd3-random';
+import crypto from 'crypto';
+import nodemailer from 'nodemailer';
 // const morgan = require('morgan');
 
 dotenv.config();
@@ -49,6 +51,15 @@ import * as segmentsLib from './segmentsLib.mjs'
 import druidLib from './druidLib.cjs'
 import * as playerWarehouseLib from './playerWarehouseLib.mjs'
 
+const mailService = nodemailer.createTransport({
+  service: 'mail.infomaniak.com',
+  port: 465,
+  secure: true,
+  auth: {
+    user: `${process.env.MAIL_USER}`,
+    pass: `${process.env.MAIL_PASS}`
+  }
+})
 
 
 mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true });
@@ -439,16 +450,67 @@ app.post('/api/getUser', async (req, res) => {
   const { email } = req.body;
 
   // Найдите пользователя по email
-  const user = await User.findOne({ email });
-
+  let user = await User.findOne({ email }).lean();
   if (!user) {
     return res.status(200).json({ success: false, error: 'User not found' });
   }
+  delete user.password
+  delete user._id
+  delete user.__v
 
   res.status(200).json({ success: true, user });
 });
+function generateVerificationCode() {
+  const randomBytes = crypto.randomBytes(4).toString('hex');
+  return randomBytes.toUpperCase();
+}
+app.post('/api/initiateChangeUserProfile', async (req, res) => {
+  const { type, email } = req.body;
+  try {
 
+    if (!type || !email) {
+      return res.status(500).json({ success: false, message: 'Wrong type or email' });
+    }
 
+    let user = await User.findOne({ email }).lean();
+    if (!user) {
+      return res.status(200).json({ success: false, error: 'User not found' });
+    }
+
+    const verificationCode = generateVerificationCode();
+    let mail
+    switch (type) {
+      case 'email': 
+        mail = {
+          from: 'team@strixgameops.com',
+          to: email,
+          subject: 'Changing Email - Verification code',
+          text: `Your verification code is ${verificationCode}`,
+        }
+        break;
+      case 'password':
+        mail = {
+          from: 'team@strixgameops.com',
+          to: email,
+          subject: 'Changing Email - Verification code',
+          text: `Your verification code is ${verificationCode}`,
+        }
+        break;
+      default:
+        return res.status(500).json({ success: false, message: 'Wrong type' });
+    }
+    if (mail) {
+      await mailService.sendMail(mail);
+      return res.status(200).json({ success: true, message: 'Sent email' });
+    }
+
+    return res.status(500).json({ success: false, message: 'Internal Server Error' });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+});
 
 // Добавление студии к паблишеру
 app.post('/api/addStudio', async (req, res) => {
