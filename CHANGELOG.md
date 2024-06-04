@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.16.0
+2024-06-04
+
+### Features
+
+- user profile api, permissions api, passwords are now hashed (b22d08850c59999457b7494abc96c7055c90074e)
+
 ## 1.15.1
 2024-06-03
 
