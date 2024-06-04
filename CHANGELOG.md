@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.15.1
+2024-06-03
+
+### Fixes
+
+- email sending API wip (cda66a15d663ecfabe3e6e7834dac6a65d991a9c)
+
 ## 1.15.0
 2024-06-03
 
