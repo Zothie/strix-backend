@@ -6,4 +6,8 @@ export const User = model('User', {
     role: String,
     isDemo: Boolean,
     avatar: String,
+    tempRegistrationConfirmCode: String,
+    tempEmailConfirmCode: String,
+    tempPasswordConfirmCode: String,
+    scheduledDeletionDate: Date,
 });

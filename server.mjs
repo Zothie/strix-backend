@@ -17,6 +17,7 @@ import abTestResults from 'ab-test-result'
 import * as d3 from 'd3-random';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import bcrypt from 'bcrypt';
 // const morgan = require('morgan');
 
 dotenv.config();
@@ -52,12 +53,12 @@ import druidLib from './druidLib.cjs'
 import * as playerWarehouseLib from './playerWarehouseLib.mjs'
 
 const mailService = nodemailer.createTransport({
-  service: 'mail.infomaniak.com',
+  host: 'mail.infomaniak.com',
   port: 465,
   secure: true,
   auth: {
     user: `${process.env.MAIL_USER}`,
-    pass: `${process.env.MAIL_PASS}`
+    pass: `${process.env.MAIL_PWD}`
   }
 })
 
@@ -115,14 +116,9 @@ app.post('/api/register', async (req, res) => {
 
   try {
 
-    // Проверяем, существует ли пользователь с таким именем
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ success: false, message: 'Email is already registered' });
-    }
     // Создаем нового пользователя
-    const newUser = new User({ email, password });
-    await newUser.save();
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = await User.updateOne({ email }, { password: hashedPassword }, { upsert: true });
 
     firebase.auth()
       // Serve email as uid
@@ -146,7 +142,7 @@ app.post('/api/login', async (req, res) => {
     const user = await User.findOne({ email });
 
     if (user) {
-      const isPasswordMatch = password === user.password;
+      const isPasswordMatch = await bcrypt.compare(password, user.password);
 
       if (isPasswordMatch) {
         firebase.auth()
@@ -158,41 +154,47 @@ app.post('/api/login', async (req, res) => {
         })
 
       } else {
-        res.status(401).json({ message: 'Неверное имя пользователя или пароль' });
+        res.status(401).json({ message: 'Wrong username or password' });
       }
     } else {
-      res.status(401).json({ message: 'Неверное имя пользователя или пароль' });
+      res.status(401).json({ message: 'Wrong username or password' });
     }
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Ошибка при аутентификации' });
+    res.status(500).json({ message: 'Internal auth error' });
   }
 });
+
 
 // Logout/signout/token revoke
 app.post('/api/logout', async (req, res) => {
   const { token } = req.body;
 
- firebase.auth().verifyIdToken(token)
- .then((decodedToken) => {
-   // Verify user after verifying token
-   const uid = decodedToken.uid;
-
-   // Force revoke user
-   firebase.auth().revokeRefreshTokens(uid)
-     .then(() => {
-       res.status(200).send('User logged out successfully');
-     })
-     .catch((error) => {
-       console.error('Error revoking refresh tokens:', error);
-       res.status(500).send('Error logging out user');
-     });
- })
- .catch((error) => {
-   // Обработка ошибок верификации токена
-   console.error('Error verifying token:', error);
-   res.status(401).send('Invalid or expired token');
- });
+  try {
+    firebase.auth().verifyIdToken(token)
+    .then((decodedToken) => {
+      // Verify user after verifying token
+      const uid = decodedToken.uid;
+   
+      // Force revoke user
+      firebase.auth().revokeRefreshTokens(uid)
+        .then(() => {
+          return res.status(200).send('User logged out successfully');
+        })
+        .catch((error) => {
+          console.error('Error revoking refresh tokens:', error);
+          return res.status(500).send('Error logging out user');
+        });
+    })
+    .catch((error) => {
+      // Обработка ошибок верификации токена
+      console.error('Error verifying token:', error);
+      return res.status(401).send('Invalid or expired token');
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
 });
 
 function processGameID(gameID) {
@@ -218,12 +220,13 @@ app.post('/api/finishInitialOnboarding', async (req, res) => {
 
       const publisherID = uuid();
       const publisher = new Publisher({ publisherID, publisherName });
-      const newPermission = { permission: 'read' };
+      const newPermission = { permission: 'admin' };
       publisher.users.push({ userID: user.email, userPermissions: [newPermission] });
 
 
       const studioID = uuid();
       const studio = new Studio({ studioID, studioName, apiKey: studioApiKey, studioIcon });
+      studio.users.push({ userID: user.email, userPermissions: [newPermission] });
       await studio.save();
   
       publisher.studios.push({ studioID });
@@ -364,6 +367,69 @@ async function createDemoGame(demoGameID, studioID) {
   });
   await newABTests.save();
 }
+app.post('/api/removeUser' , async (req, res) => {
+  const {email, token} = req.body;
+
+  if (!email || !token) {
+    return res.status(400).json({ success: false, message: 'Email and token are required' });
+  }
+
+  firebase.auth().verifyIdToken(token)
+  .then(async (decodedToken) => {
+ 
+    const currentDate = new Date();
+    const deletionDate = new Date(currentDate);
+    deletionDate.setHours(currentDate.getHours() + 72);
+    await User.findOneAndUpdate({ email: email }, {$set: {scheduledDeletionDate: deletionDate}}, {new: true, upsert: true});
+  
+    return res.status(200).json({success: true, message: 'User scheduled for removal successfully', date: deletionDate})
+
+  })
+  .catch((error) => {
+    console.error('Error verifying token:', error);
+    return res.status(400)
+  });
+
+
+  // let userUID
+  // firebase.auth().verifyIdToken(token)
+  // .then((decodedToken) => {
+  //   // Verify user after verifying token
+  //   userUID = decodedToken.uid;
+ 
+  //   // Force revoke user
+  //   firebase.auth().revokeRefreshTokens(userUID)
+  //     .catch((error) => {
+  //       console.error('Error revoking refresh tokens:', error);
+  //     });
+  // })
+  // .catch((error) => {
+  //   // Обработка ошибок верификации токена
+  //   console.error('Error verifying token:', error);
+  // });
+
+  // await User.deleteOne({ email: email });
+  // await Publisher.deleteMany(
+  //   { users: { $elemMatch: { userID: email, 
+  //     userPermissions: { $elemMatch: { permission: 'admin' } } 
+  //   }} 
+  // });
+  // await Studio.deleteMany(
+  //   { users: 
+  //     { $elemMatch: 
+  //       { userID: email, 
+  //       userPermissions: { $elemMatch: { permission: 'admin' } } 
+  //     }}
+  //   }
+  // )
+  // return res.status(200).json({ success: true });
+
+})
+app.post('/api/cancelRemoveUser', async (req, res) => {
+  const {email, token} = req.body
+  await User.findOneAndUpdate({email}, {$unset: { scheduledDeletionDate: "" }}, {new: true, upsert: true});
+  return res.status(200).json({ success: true, message: 'Deletion canceled successfully!' });
+})
 
 app.post('/api/buildDemo', async (req, res) => {
   const demoUserEmail = 'demoUser_' + uuid();
@@ -403,6 +469,9 @@ app.post('/api/buildDemo', async (req, res) => {
 async function cleanAllDemos() {
   // Remove all demo studios, publishers and users which IDs start with demo_
   
+
+  // REMAKE THIS FUNCTION SO IT ONLY CLEANS DEMO DATA OF DEMO USERS
+  // OTHERWISE IT WILL REMOVE DEMO GAMES GIVEN TO REGULAR USERS AFTER ONBOARDING
   await Studio.deleteMany({ studioID: /^demo_/ })
   await Publisher.deleteMany({ publisherID: /^demo_/ })
   await User.deleteMany({ isDemo: true })
@@ -423,7 +492,7 @@ async function cleanAllDemos() {
     await Localization.deleteMany(query);
   }
 }
-cleanAllDemos()
+// cleanAllDemos()
 
 // Получение списка всех паблишеров
 app.post('/api/getPublishers', async (req, res) => {
@@ -445,9 +514,159 @@ app.post('/api/getPublishers', async (req, res) => {
 
   res.json({success: true, publishers});
 });
+app.post('/api/getOrganizationsInfo', async (req, res) => {
+  const { email } = req.body;
+
+  // Найдите пользователя по email
+  const user = await User.findOne({ email });
+
+  if (!user) {
+    return res.status(200).json({ success: false, error: 'User not found' });
+  }
+
+  let publishers = await Publisher.find(
+    {
+      'users.userID': user.email,
+    },
+    '-_id'
+  ).lean();
+  publishers = publishers.map(publisher => {
+    let temp = publisher
+    if (!temp.users.find(u => u.userID === email).userPermissions.find(p => p.permission === 'admin')) {
+      // Clear users so regular user cannot see who else is in the organization
+      temp.users = []
+    }
+    return temp
+  })
+
+  const studioPromises = publishers.map(publisher => {
+    const studioIDs = publisher.studios.map(studio => studio.studioID);
+    return Studio.find({ studioID: { $in: studioIDs } })
+      .select('studioID studioName users -_id')
+      .lean();
+  });
+  
+  const studioResults = await Promise.all(studioPromises);
+
+  const userEmails = studioResults.flatMap(studio => studio.flatMap(s => s.users.map(u => u.userID)));
+  const users = await fetchUsersName(userEmails);
+
+  const result = publishers.map((publisher, index) => ({
+    ...publisher,
+    studios: studioResults[index].map(studio => {
+      const studioUsers = studio.users.map(user => {
+        const matchingUser = users.find(u => u.email === user.userID);
+        return {
+          userID: user.userID,
+          username: matchingUser ? matchingUser.username : 'Unknown name',
+          userPermissions: user.userPermissions,
+        };
+      });
+      return {
+        studioID: studio.studioID,
+        studioName: studio.studioName,
+        users: studioUsers,
+      };
+    }),
+  }));
+
+  res.json({success: true, publishers: result});
+});
+async function fetchUsersName(usersEmails) {
+  const users = await User.find({ email: { $in: usersEmails } });
+  return users.map(user => ({ email: user.email, username: user.username }));
+}
+app.post('/api/setUserPermissions', async (req, res) => {
+})
+app.post('/api/removeUserFromOrganization', async (req, res) => {
+  const {studioID, token, targetUserEmail} = req.body
+
+  try {
+    const decodedToken = await firebase.auth().verifyIdToken(token);
+    const uid = decodedToken.uid;
+    if (!uid) {
+      return res.status(401).send('Invalid or expired token');
+    }
+
+    // Skip authority check if user trying to remove himself from the organization
+    if (uid !== targetUserEmail) {
+      const checkAuthority = await checkUserOrganizationAuthority(studioID, uid)
+      if (!checkAuthority) {
+        return res.status(401).send('Unauthorized');
+      }
+    }
+
+    const update = {
+      $pull: {
+        users: {
+          userID: targetUserEmail,
+        },
+      },
+    };
+
+    const options = { new: true };
+
+    await Publisher.findOneAndUpdate({ studios: {$elemMatch: { studioID }} }, update, options);
+    const studio = await Studio.findOneAndUpdate({ studioID }, update, options);
+    if (!studio) {
+      return res.status(404).send('Studio not found');
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error adding user to organization:', error);
+    return res.status(500).send('Internal server error');
+  }
+})
+
+async function checkUserOrganizationAuthority(studioID, uid) {
+  const studio = await Studio.findOne({ studioID });
+  const user = studio.users.find(user => user.userID === uid);
+  return user.userPermissions.some(p => p.permission === 'admin');
+}
+app.post('/api/addUserToOrganization', async (req, res) => {
+  const {studioID, token, targetUserEmail} = req.body
+
+  try {
+    const decodedToken = await firebase.auth().verifyIdToken(token);
+    const uid = decodedToken.uid;
+    if (!uid) {
+      return res.status(401).send('Invalid or expired token');
+    }
+
+    const checkAuthority = await checkUserOrganizationAuthority(studioID, uid)
+    if (!checkAuthority) {
+      return res.status(401).send('Unauthorized');
+    }
+    
+
+    const update = {
+      $push: {
+        users: {
+          userID: targetUserEmail,
+          userPermissions: { permission: 'default' },
+        },
+      },
+    };
+
+    const options = { new: true };
+
+    await Publisher.findOneAndUpdate({ studios: {$elemMatch: { studioID }} }, update, options);
+    const studio = await Studio.findOneAndUpdate({ studioID }, update, options);
+    if (!studio) {
+      return res.status(404).send('Studio not found');
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error adding user to organization:', error);
+    return res.status(500).send('Internal server error');
+  }
+})
+
 
 app.post('/api/getUser', async (req, res) => {
-  const { email } = req.body;
+  const { email, token } = req.body;
 
   // Найдите пользователя по email
   let user = await User.findOne({ email }).lean();
@@ -457,15 +676,75 @@ app.post('/api/getUser', async (req, res) => {
   delete user.password
   delete user._id
   delete user.__v
+  let isolatedUser = {
+    email: user.email,
+    username: user.username,
+    isDemo: user.isDemo,
+    role: user.role,
+    avatar: user.avatar,
+    scheduledDeletionDate: user.scheduledDeletionDate
+  }
 
-  res.status(200).json({ success: true, user });
+  res.status(200).json({ success: true, user: isolatedUser });
 });
 function generateVerificationCode() {
   const randomBytes = crypto.randomBytes(4).toString('hex');
   return randomBytes.toUpperCase();
 }
+app.post('/api/startRegistrationProcess', async (req, res) => {
+  const { email } = req.body;
+  
+  try {
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(200).json({ success: false, message: 'Email is already registered' });
+    }
+    
+    const verificationCode = generateVerificationCode();
+    const mail = {
+      from: 'team@strixgameops.com',
+      to: email,
+      subject: 'Registration - Verification code',
+      text: `Your verification code is ${verificationCode}`,
+    }
+    const sendEmail = await mailService.sendMail(mail);
+
+    const newUser = new User({ email, tempRegistrationConfirmCode: verificationCode });
+    await newUser.save();
+
+    return res.status(200).json({ success: true, message: 'Email sent' });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to send email' });
+  }
+})
+
+app.post('/api/finishRegistrationProcess', async (req, res) => {
+  const { code, email } = req.body;
+
+  try {
+
+    const user = await User.findOne({ email }).lean();
+    const userCode = user.tempRegistrationConfirmCode;
+
+    if (userCode === code) {
+      return res.status(200).json({ success: true, message: 'Email confirmed' });
+    } else {
+      return res.status(200).json({ success: false, message: 'Wrong verification code' });
+    }
+
+
+  } catch (error) {
+    return res.status(200).json({ success: false, message: 'Failed to confirm email' });
+  }
+})
+
+
+
+
 app.post('/api/initiateChangeUserProfile', async (req, res) => {
-  const { type, email } = req.body;
+  const { type, email, newData } = req.body;
   try {
 
     if (!type || !email) {
@@ -496,26 +775,76 @@ app.post('/api/initiateChangeUserProfile', async (req, res) => {
           text: `Your verification code is ${verificationCode}`,
         }
         break;
+      case 'avatar':
+        await User.updateOne({ email }, { $set: { avatar: newData } });
+        return res.status(200).json({ success: true, message: 'Avatar updated' });
+      case 'username':
+        await User.updateOne({ email }, { $set: { username: newData } });
+        return res.status(200).json({ success: true, message: 'Username updated' });
+      case 'role':
+        await User.updateOne({ email }, { $set: { role: newData } });
+        return res.status(200).json({ success: true, message: 'Role updated' });
       default:
         return res.status(500).json({ success: false, message: 'Wrong type' });
     }
     if (mail) {
       try {
         const sendEmail = await mailService.sendMail(mail);
-        console.log(sendEmail)
       } catch (err) {
         return res.status(500).json({success: false, message: "Error sending email: " + err});
       }
+
+      if (type === 'email') {
+        await User.updateOne({ email }, { $set: { tempEmailConfirmCode: verificationCode } });
+      } else if (type === 'password') {
+        await User.updateOne({ email }, { $set: { tempPasswordConfirmCode: verificationCode } });
+      }
+
+
       return res.status(200).json({ success: true, message: 'Sent email' });
     }
 
-    return res.status(500).json({ success: false, message: 'Internal Server Error' });
+
 
   } catch (err) {
     console.log(err);
     res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 });
+
+app.post('/api/confirmUserChangeProfileCode' , async (req, res) => {
+  const { type, email, code, newData } = req.body;
+  try {
+    let user = await User.findOne({ email }).lean();
+    if (!user) {
+      return res.status(200).json({ success: false, error: 'User not found' });
+    }
+
+    if (type === 'email') {
+      if (user.tempEmailConfirmCode === code) {
+        await User.updateOne({ email }, { $set: { email: newData, tempEmailConfirmCode: null } });
+        await Publisher.updateMany({ 'users.userID': user.email }, { $set: { 'users.$.userID': newData } });
+        await Studio.updateMany({ 'users.userID': user.email }, { $set: { 'users.$.userID': newData } });
+        return res.status(200).json({ success: true, message: 'Email changed successfully' });
+      } else {
+        return res.status(200).json({ success: false, error: 'Wrong code' });
+      }
+    } else if (type === 'password') {
+      if (user.tempPasswordConfirmCode === code) {
+        await User.updateOne({ email }, { $set: { password: newData, tempPasswordConfirmCode: null } });
+        return res.status(200).json({ success: true, message: 'Password changed successfully' });
+      } else {
+        return res.status(200).json({ success: false, error: 'Wrong code' });
+      }
+    }
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+})
+
+app.post('/api/')
 
 // Добавление студии к паблишеру
 app.post('/api/addStudio', async (req, res) => {
@@ -594,15 +923,17 @@ app.post('/api/getStudioGames', async (req, res) => {
     const studio = await Studio.find({ studioID: { $in: studioIDs } });
 
     if (!studio) {
-      return res.status(404).json({ error: 'Студия не найдена' });
+      return res.status(404).json({ error: 'Studio not found' });
     }
-
+    console.log(studio)
     const gameIDs = studio
                     .map(s => s.games
                       .map(game => game.gameID))
-                    .reduce((acc, curr) => acc.concat(curr), []);
+                        .reduce((acc, curr) => acc.concat(curr), []);
+    
 
     const games = await Game.find({ gameID: { $in: gameIDs } });
+    console.log('Games for gameIDs:', gameIDs, games)
 
     let studiosAndGames = studio.map(s => ({
       studioID: s.studioID,
@@ -1168,10 +1499,39 @@ app.post('/api/revokeGameKey', async (req, res) => {
     res.status(500).send('Internal Server Error');
   }
 });
+app.post('/api/checkOrganizationAuthority', async (req, res) => {
+  const {token, orgID} = req.body
 
+  if (!token || !orgID) {
+    return res.status(401).json({success: false, message: 'Missing fields'})
+  }
+
+  const decodedToken = await firebase.auth().verifyIdToken(token);
+  const uid = decodedToken.uid;
+  if (!uid) {
+    return res.status(401).json({success: false, message: 'Invalid or expired token'})
+  }
+  const checkAuthority = await checkUserOrganizationAuthority(orgID, uid)
+  if (!checkAuthority) {
+    return res.status(401).json({success: false, message: 'Unauthorized'})
+  }
+  return res.status(200).json({success: true});
+})
 app.post('/api/removeStudio', async (req, res) => {
   try {
-    const { studioID } = req.body;
+    const { studioID, token } = req.body;
+
+    const decodedToken = await firebase.auth().verifyIdToken(token);
+    const uid = decodedToken.uid;
+    if (!uid) {
+      return res.status(401).send('Invalid or expired token');
+    }
+
+    const checkAuthority = await checkUserOrganizationAuthority(studioID, uid)
+    if (!checkAuthority) {
+      return res.status(401).send('Unauthorized');
+    }
+    
 
     const currentDate = new Date();
     const deletionDate = new Date(currentDate);
@@ -5364,6 +5724,9 @@ app.post('/api/refreshSegmentPlayerCount', async (req, res) => {
     const { gameID, branchName, segmentID } = req.body;
 
     const playerCount = await refreshSegmentPlayerCount(gameID, branchName, segmentID)
+    if (!playerCount) {
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
 
     res.status(200).json({ success: true, playerCount: playerCount.length });
 
