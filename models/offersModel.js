@@ -1,4 +1,10 @@
 import { Schema, model } from 'mongoose';
+
+  const contentItems = new Schema({
+    nodeID: String,
+    amount: Number,
+  })
+
   const offerSchema = new Schema({
     offerID: String,
     offerName: String,
@@ -29,9 +35,11 @@ import { Schema, model } from 'mongoose';
           amount: Number,
         }
       ],
+      discount: Number,
     },
 
-    content: Array,
+    content: [contentItems],
+    removed: Boolean,
   });
   
   const branchSchema = new Schema({

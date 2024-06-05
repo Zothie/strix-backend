@@ -40,6 +40,7 @@ import { Schema, model } from 'mongoose';
     analyticsEvents: [String],
     entityCategory: entityCategorySchema,
     entityBasic: entityBasicSchema,
+    removed: Boolean,
   });
   
   const planningTypeSchema = new Schema({

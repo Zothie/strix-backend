@@ -2251,40 +2251,89 @@ app.post('/api/removePlanningNode', async (req, res) => {
     }
 
     // Извлечь идентификаторы
-    const { remoteConfigParams, analyticsEvents } = node;
+    // const { remoteConfigParams, analyticsEvents } = node;
 
-    // Удалить объекты из RemoteConfig
-    if (remoteConfigParams && remoteConfigParams.length) {
-        await RemoteConfig.updateMany(
-            { gameID },
-            { $pull: { 'branches.$[].params': { paramID: { $in: remoteConfigParams } } } }
-        );
-    }
+    // // Удалить объекты из RemoteConfig
+    // if (remoteConfigParams && remoteConfigParams.length) {
+    //     await RemoteConfig.updateMany(
+    //         { gameID },
+    //         { $pull: { 'branches.$[].params': { paramID: { $in: remoteConfigParams } } } }
+    //     );
+    // }
 
-    // Удалить объекты из AnalyticsEvents
-    if (analyticsEvents && analyticsEvents.length) {
-        await AnalyticsEvents.updateMany(
-            { gameID },
-            { $pull: { 'branches.$[].events': { eventID: { $in: analyticsEvents } } } }
-        );
-        // Clearing up all dependent templates from Player Warehouse
-        removeAnalyticsTemplatesByEventID(gameID, branchName, analyticsEvents)
-    }
-    // Clearing all traces of this node in planning tree
-    removePlanningNodeObjectByNodeID(gameID, branchName, nodeID)
+    // // Удалить объекты из AnalyticsEvents
+    // if (analyticsEvents && analyticsEvents.length) {
+    //     await AnalyticsEvents.updateMany(
+    //         { gameID },
+    //         { $pull: { 'branches.$[].events': { eventID: { $in: analyticsEvents } } } }
+    //     );
+    //     // Clearing up all dependent templates from Player Warehouse
+    //     removeAnalyticsTemplatesByEventID(gameID, branchName, analyticsEvents)
+    // }
+    // // Clearing all traces of this node in planning tree
+    // removePlanningNodeObjectByNodeID(gameID, branchName, nodeID)
 
-    // Clearing all R&C references
-    removeObjectsByNodeID(gameID, branchName, nodeID)
+    // // Clearing all R&C references
+    // removeObjectsByNodeID(gameID, branchName, nodeID)
 
-    // Удалить узел
-    await NodeModel.updateOne(
-        { gameID, 'branches.branch': branchName },
-        { $pull: { 'branches.$.planningTypes.$[].nodes': { nodeID } } }
-    );
+    // // Remove node
+    // await NodeModel.updateOne(
+    //   { 
+    //     gameID, 
+    //     'branches.branch': branchName,
+    //   },
+    //   { 
+    //     $set: { 'branches.$.planningTypes.$[].nodes.$[node].removed': true } 
+    //   },
+    //   { 
+    //     arrayFilters: [{ 'node.nodeID': nodeID }],
+    //     upsert: true,
+    //   }
+    // );
+
+    // Trying to remove node from offers
+    await Offers.updateMany(
+      { 
+        gameID,
+        'branches.branch': branchName,
+      },
+      {
+        $pull: {
+          'branches.$.offers.$[offer].content': {nodeID: nodeID}
+        }
+      },
+      {
+        arrayFilters: [
+          { 'offer.content.nodeID': nodeID }
+        ]
+      }
+    )
+    const resp = await Offers.updateMany(
+      { 
+        gameID,
+        'branches.branch': branchName,
+        'branches.offers.offerPrice.nodeID': nodeID,
+      },
+      {
+        $set: {
+          'branches.$[branch].offers.$[offer].offerPrice.targetCurrency': 'money',
+          'branches.$[branch].offers.$[offer].offerPrice.moneyCurr': [{ amount: 100, cur: "USD" }],
+          'branches.$[branch].offers.$[offer].offerPrice.nodeID': null,
+          'branches.$[branch].offers.$[offer].offerPrice.amount': 0,
+        }
+      },
+      {
+        arrayFilters: [
+          { 'branch.branch': branchName },
+          { 'offer.offerPrice.nodeID': nodeID }
+        ]
+      }
+    )
+    console.log(resp)
 
     res.status(200).json({ success: true, message: 'Node and related data deleted successfully' });
 } catch (error) {
-    console.error('Error in /api/deleteNode:', error);
+    console.error('Error in /api/removePlanningNode:', error);
     res.status(500).json({ success: false, message: 'Internal Server Error' });
 }
 });
@@ -2426,9 +2475,9 @@ async function removePlanningNodeObjectByNodeID(gameID, branchName, nodeID) {
 
     await document.save(); // Сохраняем обновленный документ в базе данных
 
-    console.log('Удаление узлов выполнено успешно.');
+    console.log('Successfully removed node from PlanningTree.');
   } catch (error) {
-    console.error('Ошибка при удалении узлов:', error);
+    console.error('Error removing node from PlanningTree:', error);
   }
 }
 
@@ -2543,7 +2592,7 @@ app.post('/api/getPlanningNodes', async (req, res) => {
       return res.status(200).json({ success: false, error: 'No planning type found' });
     }
 
-    const nodesList = planningTypeObj.nodes;
+    const nodesList = planningTypeObj.nodes.filter(n => !n.removed);
 
     res.json({ success: true, nodes: nodesList });
   } catch (error) {
@@ -3626,7 +3675,7 @@ app.post('/api/getEntitiesIDs', async (req, res) => {
   try {
     const { gameID, branch } = req.body;
 
-    const entities = await NodeModel.aggregate([
+    let entities = await NodeModel.aggregate([
       { $match: { gameID } }, 
       { $unwind: "$branches" }, 
       { $match: { "branches.branch": branch } }, 
@@ -3645,6 +3694,8 @@ app.post('/api/getEntitiesIDs', async (req, res) => {
 
       { $replaceRoot: { newRoot: "$branches.planningTypes.nodes" } }
     ]);
+
+    entities = entities.filter(n => !n.removed);
 
     if (!entities) {
       return res.status(404).json({ message: 'Entity not found' });
@@ -3675,6 +3726,8 @@ app.post('/api/getEntitiesNames', async (req, res) => {
         }
       }
     ]);
+
+    entities = entities.filter(n => !n.removed);
 
     if (!entities) {
       return res.status(404).json({ message: 'Entity not found' });
@@ -3713,7 +3766,7 @@ app.post('/api/getEntityIcon', async (req, res) => {
         }
       }
     ]);
-
+    
     entityIcon = entityIcon[0]
     if (entityIcon.entityBasic) {
       entityIcon = entityIcon.entityBasic.entityIcon
@@ -3722,7 +3775,7 @@ app.post('/api/getEntityIcon', async (req, res) => {
     }
 
 
-    if (!entityIcon) {
+    if (!entityIcon && entityIcon !== '') {
       return res.status(404).json({ message: 'Entity not found' });
     }
     res.status(200).json({ success: true, entityIcon });
@@ -4391,13 +4444,15 @@ app.post('/api/getOffers', async (req, res) => {
   const { gameID, branch } = req.body;
 
   try {
-    const offers = await Offers.aggregate([
+    let offers = await Offers.aggregate([
         { $match: { gameID } }, 
         { $unwind: "$branches" }, 
         { $match: { "branches.branch": branch } }, 
         { $unwind: "$branches.offers" }, 
         { $replaceRoot: { newRoot: `$branches.offers` } }
     ]);
+
+    offers = offers.filter(o => !o.removed)
 
     res.status(200).json({ success: true, offers });
   } catch (error) {
@@ -4424,22 +4479,21 @@ app.post('/api/removeOffer', async (req, res) => {
     })
     positions = JSON.stringify(positions)
 
-    const result = await Offers.findOneAndUpdate(
+    await Offers.findOneAndUpdate(
       { 
         gameID, 
         'branches.branch': branch 
       },
       { 
-        $pull: { 
-          'branches.$[branch].offers': { offerID: offerID } 
-        },
         $set: { 
+          'branches.$[branch].offers.$[offer].removed': true,
           'branches.$[branch].positions': positions
-        }
+        },
       },
       {
         arrayFilters: [
-          { 'branch.branch': branch }
+          { 'branch.branch': branch },
+          { 'offer.offerID': offerID }
         ],
         new: true
       }
@@ -10888,7 +10942,7 @@ app.post('/api/analytics/getRandomDataForABTest', async (req, res) => {
   let randStart_control = parseInt(randStart_controlSamples*controlDeviation)
 
   let randStart_testSamples = randomNumberInRange(100, 1000)
-  const testDeviation = controlDeviation + randomNumberInRange(-0.01, 0.01, true)
+  const testDeviation = parseFloat(controlDeviation) + parseFloat(randomNumberInRange(-0.01, 0.01, true))
   let randStart_test = parseInt(randStart_testSamples*testDeviation)
 
   console.log('Generating control results', randStart_control)
@@ -10932,11 +10986,6 @@ app.post('/api/analytics/getRandomDataForABTest', async (req, res) => {
     const currentTest = generatedData[i].test;
     const currentControlSamples = generatedData[i].controlSamples;
     const currentTestSamples = generatedData[i].testSamples;
-
-    // Собираем данные за предыдущие дни
-    const prevDaysData = generatedData
-      .filter((item, index) => new Date(item.timestamp) < currentDate && index < i)
-      .map(item => ({ control: item.control, test: item.test }));
 
     // Вычисляем p-value на основе данных за текущий и предыдущие дни
     const res = calculatePValue(currentControl, currentControlSamples, currentTest, currentTestSamples);
