@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.16.1
+2024-06-05
+
+### Fixes
+
+- minor fixes (6c99f5c2c67ae330bc6d81d4bca84bd9ae66c42c)
+
 ## 1.16.0
 2024-06-04
 
