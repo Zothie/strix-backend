@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.17.0
+2024-06-06
+
+### Features
+
+- new offers api, minor fixes (095064995d23707ec1b8ddf7f453ec1c938b7d6b)
+
 ## 1.16.1
 2024-06-05
 
