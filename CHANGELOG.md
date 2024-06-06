@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.17.1
+2024-06-06
+
+### Fixes
+
+- critical bug regarding /demo (babb4684a533452e2c7a34fbb5edb11433cb5ecd)
+
 ## 1.17.0
 2024-06-06
 
