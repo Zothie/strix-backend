@@ -439,12 +439,12 @@ app.post('/api/buildDemo', async (req, res) => {
 
   const publisherID = 'demo_' + uuid();
   const publisher = new Publisher({ publisherID, publisherName: 'Demo Publisher' });
-  const newPermission = { permission: 'read' };
+  const newPermission = { permission: 'admin' };
   publisher.users.push({ userID: demoUserEmail, userPermissions: [newPermission] });
-
-
+      
   const studioID = 'demo_' + uuid();
   const studio = new Studio({ studioID, studioName: 'Demo Studio', apiKey: 'demo_' + uuid(), studioIcon: '' });
+  studio.users.push({ userID: demoUserEmail, userPermissions: [newPermission] });
   await studio.save();
 
   publisher.studios.push({ studioID });
@@ -620,9 +620,14 @@ app.post('/api/removeUserFromOrganization', async (req, res) => {
 })
 
 async function checkUserOrganizationAuthority(studioID, uid) {
-  const studio = await Studio.findOne({ studioID });
-  const user = studio.users.find(user => user.userID === uid);
-  return user.userPermissions.some(p => p.permission === 'admin');
+  try {
+    const studio = await Studio.findOne({ studioID });
+    const user = studio.users.find(user => user.userID === uid);
+    return user.userPermissions.some(p => p.permission === 'admin');
+  } catch (err) {
+    console.error('Error checking user authority:', err);
+    return false
+  }
 }
 app.post('/api/addUserToOrganization', async (req, res) => {
   const {studioID, token, targetUserEmail} = req.body
