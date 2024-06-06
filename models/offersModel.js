@@ -50,6 +50,12 @@ import { Schema, model } from 'mongoose';
     },
     offers: [offerSchema],
     positions: String,
+    pricing: [
+      {
+        code: String,
+        base: Number,
+      }
+    ]
   });
   
   const resultSchema = new Schema({

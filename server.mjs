@@ -4377,12 +4377,74 @@ app.post('/api/createNewOffer', async (req, res) => {
     res.status(500).json({ error: 'Internal Server Error' });
   }
 })
+app.post('/api/getPricing', async (req, res) => {
+  const {gameID, branch} = req.body
+  try {
+
+    let pricing = await Offers.aggregate([
+      { $match: { gameID } }, 
+      { $unwind: "$branches" }, 
+      { $match: { "branches.branch": branch } }, 
+      { $unwind: "$branches.pricing" }, 
+      { $replaceRoot: { newRoot: `$branches.pricing` } }
+    ]);
+
+    res.status(200).json({ success: true, pricing });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
+app.post('/api/updatePricingItem', async (req, res) => {
+  const { gameID, branch, pricingItem } = req.body;
+  try {
+    
+    const updateResult = await Offers.updateOne(
+      {
+        gameID,
+        'branches.branch': branch,
+        'branches.pricing.code': pricingItem.code
+      },
+      {
+        $set: { 'branches.$[branch].pricing.$[pricingItem]': pricingItem }
+      },
+      {
+        arrayFilters: [
+          { 'branch.branch': branch },
+          { 'pricingItem.code': pricingItem.code }
+        ],
+        new: true
+      }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      // If no documents were modified, it means the item does not exist
+      await Offers.updateOne(
+        {
+          gameID,
+          'branches.branch': branch
+        },
+        {
+          $addToSet: {
+            'branches.$.pricing': pricingItem
+          }
+        }
+      );
+      
+    }
+
+
+    res.status(200).json({ success: true, message: 'Pricing updated successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+})
 app.post('/api/updateOffer', async (req, res) => {
   const { gameID, branch, offerObj } = req.body;
   try {
     // content, price-moneyCurr, triggers fields must be stringified from JSON
-
-    console.log(offerObj)
     
     const offer = {
       offerID: offerObj.offerId,
@@ -4409,6 +4471,7 @@ app.post('/api/updateOffer', async (req, res) => {
         nodeID: offerObj.price.nodeID,
         amount: offerObj.price.amount,
         moneyCurr: offerObj.price.moneyCurr,
+        discount: offerObj.price.discount,
       },
 
       content: offerObj.content,
@@ -4434,7 +4497,7 @@ app.post('/api/updateOffer', async (req, res) => {
       }
     ).exec();
 
-    res.status(200).json({ success: true, message: 'Offer created successfully' });
+    res.status(200).json({ success: true, message: 'Offer updated successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Internal Server Error' });
