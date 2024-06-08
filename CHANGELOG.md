@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 1.17.2
+2024-06-08
+
+### Fixes
+
+- critical crash issue (3efb87d87055cba5285d910192d8f850dbb15f0c)
+
 ## 1.17.1
 2024-06-06
 
