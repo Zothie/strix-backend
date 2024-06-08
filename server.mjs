@@ -370,26 +370,29 @@ async function createDemoGame(demoGameID, studioID) {
 app.post('/api/removeUser' , async (req, res) => {
   const {email, token} = req.body;
 
-  if (!email || !token) {
-    return res.status(400).json({ success: false, message: 'Email and token are required' });
-  }
-
-  firebase.auth().verifyIdToken(token)
-  .then(async (decodedToken) => {
- 
-    const currentDate = new Date();
-    const deletionDate = new Date(currentDate);
-    deletionDate.setHours(currentDate.getHours() + 72);
-    await User.findOneAndUpdate({ email: email }, {$set: {scheduledDeletionDate: deletionDate}}, {new: true, upsert: true});
+  try {
+    if (!email || !token) {
+      return res.status(400).json({ success: false, message: 'Email and token are required' });
+    }
   
-    return res.status(200).json({success: true, message: 'User scheduled for removal successfully', date: deletionDate})
-
-  })
-  .catch((error) => {
-    console.error('Error verifying token:', error);
-    return res.status(400)
-  });
-
+    firebase.auth().verifyIdToken(token)
+    .then(async (decodedToken) => {
+    
+      const currentDate = new Date();
+      const deletionDate = new Date(currentDate);
+      deletionDate.setHours(currentDate.getHours() + 72);
+      await User.findOneAndUpdate({ email: email }, {$set: {scheduledDeletionDate: deletionDate}}, {new: true, upsert: true});
+    
+      return res.status(200).json({success: true, message: 'User scheduled for removal successfully', date: deletionDate})
+    
+    })
+    .catch((error) => {
+      console.error('Error verifying token:', error);
+      return res.status(400)
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Error removing user' });
+  }
 
   // let userUID
   // firebase.auth().verifyIdToken(token)
@@ -1072,38 +1075,47 @@ app.post('/api/createGame', async (req, res) => {
               {
                 templateID: 'lastReturnDate',
                 templateName: 'Last Return Date',
+                templateDefaultVariantType: 'date'
               },
               {
                 templateID: 'lastPaymentDate',
                 templateName: 'Last Payment Date',
+                templateDefaultVariantType: 'date'
               },
               {
                 templateID: 'totalPaymentsSumm',
                 templateName: 'Total Payments Summ',
+                templateDefaultVariantType: 'float'
               },
               {
                 templateID: 'totalPaymentsCount',
                 templateName: 'Total Payments Count',
+                templateDefaultVariantType: 'integer'
               },
               {
                 templateID: 'country',
                 templateName: 'Country',
+                templateDefaultVariantType: 'string'
               },
               {
                 templateID: 'engineVersion',
                 templateName: 'Engine Version',
+                templateDefaultVariantType: 'string'
               },
               {
                 templateID: 'gameVersion',
                 templateName: 'Game Version',
+                templateDefaultVariantType: 'string'
               },
               {
                 templateID: 'language',
                 templateName: 'Language',
+                templateDefaultVariantType: 'string'
               },
               {
                 templateID: 'meanSessionLength',
                 templateName: 'Mean. Session Length',
+                templateDefaultVariantType: 'float'
               },
             ],
             statistics: [
@@ -1511,16 +1523,21 @@ app.post('/api/checkOrganizationAuthority', async (req, res) => {
     return res.status(401).json({success: false, message: 'Missing fields'})
   }
 
-  const decodedToken = await firebase.auth().verifyIdToken(token);
-  const uid = decodedToken.uid;
-  if (!uid) {
-    return res.status(401).json({success: false, message: 'Invalid or expired token'})
+  try {
+    const decodedToken = await firebase.auth().verifyIdToken(token);
+    const uid = decodedToken.uid;
+    if (!uid) {
+      return res.status(401).json({success: false, message: 'Invalid or expired token'})
+    }
+    const checkAuthority = await checkUserOrganizationAuthority(orgID, uid)
+    if (!checkAuthority) {
+      return res.status(401).json({success: false, message: 'Unauthorized'})
+    }
+    return res.status(200).json({success: true});
+  } catch (err) {
+    console.error('error checkOrganizationAuthority:', err)
+    return res.status(200).json({success: false, message: 'Internal Server Error'})
   }
-  const checkAuthority = await checkUserOrganizationAuthority(orgID, uid)
-  if (!checkAuthority) {
-    return res.status(401).json({success: false, message: 'Unauthorized'})
-  }
-  return res.status(200).json({success: true});
 })
 app.post('/api/removeStudio', async (req, res) => {
   try {
@@ -3715,7 +3732,7 @@ app.post('/api/getEntitiesNames', async (req, res) => {
   try {
     const { gameID, branch } = req.body;
 
-    const entities = await NodeModel.aggregate([
+    let entities = await NodeModel.aggregate([
       { $match: { gameID } }, 
       { $unwind: "$branches" }, 
       { $match: { "branches.branch": branch } }, 
@@ -8303,7 +8320,7 @@ app.post('/api/analytics/getRandomDataForUniversalChart', async (req, res) => {
         let generatedData = []
 
         let values
-        for (i = 0; i <= dateDiff-1; i++) {
+        for (let index = 0; index <= dateDiff-1; index++) {
           values = categoryArray.map(item => {
             return {
                 [categoryField]: item,
@@ -12001,9 +12018,10 @@ async function populateElements(gameID, branchName) {
       new: true
     }
   )
+  console.log('Populated templates')
 
 }
-// populateElements('8e116fca-66c4-4669-beb9-56d99940f70d', 'development')
+// populateElements('c4a6f94b-fad9-481a-bb1e-3a1d42f40559', 'development')
 
 
 app.get('/api/health', async (req, res, next) => {
