@@ -2,6 +2,15 @@
 
 <!--- next entry here -->
 
+## 2.0.0
+2024-06-15
+
+### Breaking changes
+
+#### BREAKING CHANGE: Refactoring and content cooking module WIP (76d5b992e6774106464d0cb299c6384eb28aab76)
+
+Refactoring and content cooking module WIP
+
 ## 1.17.2
 2024-06-08
 
