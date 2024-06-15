@@ -1,5 +1,5 @@
-import {Segments} from './models/segmentsModel.js'
-import {PWplayers as PlayerWarehouse} from './models/PWplayers.js'
+import {Segments} from '../models/segmentsModel.js'
+import {PWplayers as PlayerWarehouse} from '../models/PWplayers.js'
 
 // Here we calculate all conditions and return true or false if player should be in a given segment
 export function calculatePlayerSegment(playerObject, segment) {

@@ -1,4 +1,4 @@
-import {PWplayers as PlayerWarehouse} from './models/PWplayers.js'
+import {PWplayers as PlayerWarehouse} from '../models/PWplayers.js'
 
 
 // Set elementValue of a given player

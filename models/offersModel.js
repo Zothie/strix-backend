@@ -55,6 +55,12 @@ import { Schema, model } from 'mongoose';
         code: String,
         base: Number,
       }
+    ],
+    associations: [
+      {
+        offerID: String,
+        sku: String,
+      }
     ]
   });
   
