@@ -84,7 +84,7 @@ export async function updateGameDetails(
     updatedData.apiKeys = apiKeys.map((key) => {
       return {
        ...key,
-        key: encryptString(key.key)
+        key: key.key && key.key !== '' ? encryptString(key.key) : key.key
       }
     })
 

@@ -77,8 +77,13 @@ export async function getPositionedOffers(gameID, branch) {
       return null;
     }
 
-    const positions = JSON.parse(result[0].branches.positions);
-    return positions;
+    try {
+      const positions = JSON.parse(result[0].branches.positions);
+      return positions;
+    } catch {
+      return [];
+    }
+
   } catch (error) {
     throw error;
   }
@@ -263,16 +268,17 @@ export async function updateOffer(gameID, branch, offerObj) {
   }
 }
 
-export async function updatePricingItem(gameID, branch, pricingItem) {
+export async function updatePricingItem(gameID, branch, pricingItem, type) {
   try {
+
     const updateResult = await Offers.updateOne(
       {
         gameID,
         "branches.branch": branch,
-        "branches.pricing.code": pricingItem.code,
+        [`branches.pricing.${type}.code`]: pricingItem.code,
       },
       {
-        $set: { "branches.$[branch].pricing.$[pricingItem]": pricingItem },
+        $set: { [`branches.$[branch].pricing.${type}.$[pricingItem]`]: pricingItem },
       },
       {
         arrayFilters: [
@@ -285,14 +291,14 @@ export async function updatePricingItem(gameID, branch, pricingItem) {
 
     if (updateResult.modifiedCount === 0) {
       // If no documents were modified, it means the item does not exist
-      await Offers.updateOne(
+      const insertResult = await Offers.updateOne(
         {
           gameID,
           "branches.branch": branch,
         },
         {
           $addToSet: {
-            "branches.$.pricing": pricingItem,
+            [`branches.$.pricing.${type}`]: pricingItem,
           },
         }
       );
@@ -312,7 +318,12 @@ export async function getPricing(gameID, branch) {
       { $replaceRoot: { newRoot: "$branches.pricing" } },
     ]);
 
-    return pricing;
+    
+    let currencies = [], regions = [];
+    if (pricing[0].currencies && pricing[0].currencies.length > 0) currencies = pricing[0].currencies;
+    if (pricing[0].regions && pricing[0].regions.length > 0) regions = pricing[0].regions;
+
+    return {currencies, regions};
   } catch (error) {
     throw error;
   }

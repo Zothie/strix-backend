@@ -50,12 +50,21 @@ import { Schema, model } from 'mongoose';
     },
     offers: [offerSchema],
     positions: String,
-    pricing: [
-      {
-        code: String,
-        base: Number,
-      }
-    ],
+    pricing: {
+      currencies: [
+        {
+          code: String,
+          base: Number,
+        }
+      ],
+      regions: [
+        {
+          code: String,
+          base: Number,
+        }
+      ],
+    },
+    
     associations: [
       {
         offerID: String,

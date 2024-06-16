@@ -797,7 +797,7 @@ app.post('/api/getEntitiesIDs', async (req, res, next) => {
     const entities = await getEntitiesIDs(gameID, branch);
     
     if (!entities || entities.length === 0) {
-      return res.status(404).json({ message: 'Entities not found' });
+      return res.status(200).json({ success: false, message: 'Entities not found' });
     }
     res.status(200).json({ success: true, entities });
   } catch (error) {
@@ -981,18 +981,18 @@ app.post('/api/createNewOffer', async (req, res, next) => {
 app.post('/api/getPricing', async (req, res, next) => {
   const { gameID, branch } = req.body;
   try {
-    const pricing = await getPricing(gameID, branch);
+    const result = await getPricing(gameID, branch);
 
-    res.status(200).json({ success: true, pricing });
+    res.status(200).json({ success: true, pricing: result });
   } catch (error) {
     console.error(error);
     next(error);
   }
 });
 app.post('/api/updatePricingItem', async (req, res, next) => {
-  const { gameID, branch, pricingItem } = req.body;
+  const { gameID, branch, pricingItem, type } = req.body;
   try {
-    await updatePricingItem(gameID, branch, pricingItem);
+    await updatePricingItem(gameID, branch, pricingItem, type);
 
     res.status(200).json({ success: true, message: 'Pricing updated successfully' });
   } catch (error) {

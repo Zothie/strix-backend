@@ -588,12 +588,12 @@ export async function finishUserOnboarding({ publisherName, email, username, job
   user.username = username;
   await user.save();
 
-  const publisherID = uuid.v4();
+  const publisherID = uuid();
   const publisher = new Publisher({ publisherID, publisherName });
   const newPermission = { permission: 'admin' };
   publisher.users.push({ userID: user.email, userPermissions: [newPermission] });
 
-  const studioID = uuid.v4();
+  const studioID = uuid();
   const studio = new Studio({ studioID, studioName, apiKey: studioApiKey, studioIcon });
   studio.users.push({ userID: user.email, userPermissions: [newPermission] });
   await studio.save();
