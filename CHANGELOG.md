@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 2.0.1
+2024-06-16
+
+### Fixes
+
+- bugfixes & cooker updates (4bbad47ed29279c9bbb048d48053425763c23cf3)
+
 ## 2.0.0
 2024-06-15
 
