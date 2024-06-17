@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 2.0.2
+2024-06-17
+
+### Fixes
+
+- bugfixes (82af858e28b95720ea43bf9faf9a941409edd061)
+
 ## 2.0.1
 2024-06-16
 
