@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 2.1.0
+2024-06-17
+
+### Features
+
+- content cooker (aca6da23c5db9cdc5d97d6478c39e00407146dd1)
+
 ## 2.0.2
 2024-06-17
 
