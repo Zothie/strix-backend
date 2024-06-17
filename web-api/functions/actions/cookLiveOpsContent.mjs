@@ -248,23 +248,65 @@ export async function pushChangesToBranch(gameID, sourceBranch, targetBranch) {
             }
         );
         console.log('Done moving segments');
+
+        // 
+        // AB tests
+        // 
+        console.log('Moving ab tests...');
+        const abtests = await ABTests.findOne(
+            { 
+                gameID: gameID
+            },
+            { 
+                branches: { $elemMatch: { branch: sourceBranch } }, _id: 0 
+            }
+        ).lean();
+        await ABTests.findOneAndUpdate(
+            {
+              gameID: gameID,
+              branches: { $elemMatch: { branch: targetBranch } }
+            },
+            {
+              $set: {
+                'branches.$.tests': abtests.branches.find(b => b.branch === sourceBranch).tests,
+              }
+            },
+            {
+                new: true,
+                upsert: true,
+            }
+        );
+        console.log('Done moving ab tests');
         console.log('-------END MOVING DB CONTENT-------');
     }
-    // await pushChanges();
+    await pushChanges();
 
 
     try {
         console.log('-------START COOKING CONTENT-------');
+
+
         console.log('Cooking events...');
-        // await cookAnalyticsEvents(gameID, sourceBranch)
-        console.log('Offers cooked');
-    
+        await cookAnalyticsEvents(gameID, sourceBranch)
+        console.log('Events cooked');
+
         console.log('Cooking offers...');
         await cookOffers(gameID, sourceBranch);
+        console.log('Offers cooked');
     
         console.log('Cooking entities...');
-        // await cookEntities(gameID, sourceBranch)
+        await cookEntities(gameID, sourceBranch)
         console.log('Entities cooked')
+
+        console.log('Cooking AB tests...');
+        await cookABTests(gameID, sourceBranch)
+        console.log('AB tests cooked');
+
+        console.log('Cooking PW templates...');
+        await cookPWTemplates(gameID, sourceBranch)
+        console.log('PW templates cooked');
+
+
         console.log('-------END COOKING CONTENT-------');
     } catch (error) {
        throw error;
@@ -274,6 +316,55 @@ export async function pushChangesToBranch(gameID, sourceBranch, targetBranch) {
     console.error("Error cooking content:", error);
     throw error;
   }
+}
+async function cookPWTemplates(gameID, branch) {
+  const config = await getWarehouseTemplates(gameID, branch);
+
+  let cookedConfig = config.statistics.map((t) => {
+    const ranges = {
+      rangeMin: t.templateValueRangeMin,
+      rangeMax: t.templateValueRangeMax,
+    }
+    const rangesValid = 
+    (ranges.rangeMin && ranges.rangeMin !== '') 
+    && 
+    (ranges.rangeMax && ranges.rangeMax !== '')
+
+    return {
+      id: t.templateID,
+      codename: t.templateCodeName,
+      type: t.templateType,
+      defaultValue: t.templateDefaultValue,
+      ...rangesValid && rangesValid,
+    }
+  })
+
+  // Uploading all offers to the DB
+  insertData("stattemplates", cookedConfig);
+  return {success: true}
+}
+async function cookABTests(gameID, branch) {
+  const config = await getABTests(gameID, branch);
+
+  if (config.abTests.length === 0) return {success: true}
+
+  let cookedConfig = config.abTests.map((test, i) => {
+    let tempSubj = JSON.parse(test.subject)
+    return {
+      id: test.id,
+      codename: test.codename,
+      segments: JSON.parse(test.segments),
+      observedMetric: JSON.parse(test.observedMetric),
+      subject: {
+        type: tempSubj.type,
+        itemID: tempSubj.itemID,
+      },
+    }
+  })
+  
+  // Uploading all offers to the DB
+  insertData("abtests", cookedConfig);
+  return {success: true}
 }
 async function cookAnalyticsEvents(gameID, branch) {
   const config = await getAllAnalyticsEventsv2(gameID, branch);
@@ -321,20 +412,19 @@ async function cookOffers(gameID, branch) {
           let testedOffer = config.find((o) => o.offerID === t.subject.itemID);
           if (!testedOffer) return null;
 
-          if (t.subject.icon) {
-            testedOffer.offerIcon = t.subject.icon;
+          if (t.subject.changedFields.icon) {
+            testedOffer.offerIcon = t.subject.changedFields.icon;
           }
-          if (t.subject.content) {
-            testedOffer.content = t.subject.content;
+          if (t.subject.changedFields.content) {
+            testedOffer.content = t.subject.changedFields.content;
           }
-          if (t.subject.price) {
-            testedOffer.offerPrice = t.subject.price;
+          if (t.subject.changedFields.price) {
+            testedOffer.offerPrice = t.subject.changedFields.price;
           }
 
           testedOffer.offerID = testedOffer.offerID + "|" + t.id;
         })
         .filter(Boolean);
-
       if (additiveOffers.length > 0) {
         config.push(...additiveOffers);
       }
@@ -362,6 +452,7 @@ async function cookOffers(gameID, branch) {
       asku: asku,
     };
   });
+  
 
   // Giving each offer pricing
   cookedConfig.forEach((offer, i) => {
@@ -441,6 +532,7 @@ async function cookOffers(gameID, branch) {
             .filter(region => offerPricing.map(p => p.region).includes(region.code) === false)
             .map(r => {
                 // Getting the default currency amount from pricing table
+                if (!offer.pricing.moneyCurr[0]) return null
                 const defaultCurrencyPrice = pricingTable.currencies.find(c => c.code === offer.pricing.moneyCurr[0].cur).base
                 // Getting the localized price (of any currency) from table
                 const regionalPrice = pricingTable.regions.find(tr => tr.code === r.code)?.base
@@ -479,32 +571,6 @@ async function cookOffers(gameID, branch) {
       }
     }
     return array;
-  }
-  function scaleCurrencyToPricingTable(offer, code) {
-    try {
-      let defaultCurrencyAmount = offer.pricing.moneyCurr.find(
-        (c) => c.cur === "USD"
-      )?.amount;
-
-      if (defaultCurrencyAmount === 0) {
-        return 0;
-      }
-
-      let baseCurrencyValue = pricingTable.find((c) => c.code === "USD")?.base;
-      let targetCurrencyValue = pricingTable.find((c) => c.code === code)?.base;
-      let diff = (targetCurrencyValue - baseCurrencyValue) / baseCurrencyValue;
-
-      let resultScaledBase =
-        diff * defaultCurrencyAmount + defaultCurrencyAmount;
-      if (isNaN(resultScaledBase)) {
-        return 0;
-      } else {
-        resultScaledBase = parseFloat(resultScaledBase.toFixed(2));
-      }
-      return resultScaledBase;
-    } catch (error) {
-      return 0;
-    }
   }
 
   // Harvesting offers that are intended to be actual IAPs for a real money purchase
@@ -545,13 +611,15 @@ async function cookOffers(gameID, branch) {
 
   // Syncing with Google Play IAPs
   try {
-    await uploadIapConfig(gameID, realMoneyOffers);
+    if (realMoneyOffers.length > 0) {
+      await uploadIapConfig(gameID, realMoneyOffers);
+    }
   } catch (error) {
     throw error;
   }
 
   // Uploading all offers to the DB
-  //   insertData("offers", cookedConfig);
+  insertData("offers", cookedConfig);
   return {success: true}
 }
 async function cookEntities(gameID, branch) {
@@ -564,9 +632,9 @@ async function cookEntities(gameID, branch) {
 
   config.forEach((entity, i) => {
     let result = buildEntityConfig(entity);
+    console.log('Building config for entity', entity)
     if (result !== null) {
       cookedConfig.push(result);
-      console.log(result);
     }
   });
 
@@ -871,7 +939,7 @@ async function cookEntities(gameID, branch) {
       gatherInheritedConfigs(parentCategory);
 
       result.inheritedCategories = tempInheritedCategories;
-      result.config = JSON.parse(result.specifics.mainConfigs);
+      result.config = result.specifics.mainConfigs !== '' ? JSON.parse(result.specifics.mainConfigs) : [];
 
       if (inheritedConfigs.length > 0) {
         inheritedConfigs = resolveInheritance(inheritedConfigs);

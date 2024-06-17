@@ -3,8 +3,7 @@ import rethinkdb from "rethinkdb";
 let dbConnection = null;
 const dbNamePrefix = "strix";
 const dbNamespaces = ["eu"];
-const tablesNamespaces = ["analytics", "offers", "entities", "segments"];
-const defaultDocumentKey = 1;
+const tablesNamespaces = ["analytics", "offers", "entities", "segments", "abtests", "stattemplates"];
 
 export function checkDBConnection() {
   return dbConnection;
