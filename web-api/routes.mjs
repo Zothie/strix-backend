@@ -49,8 +49,6 @@ import * as startupTestScripts from './startup/test.mjs';
 Object.assign(global, startupTestScripts);
 import * as utilityFuncLib from './functions/utility.mjs';
 Object.assign(global, utilityFuncLib);
-import * as wrapperFuncLib from './functions/wrapper.mjs';
-Object.assign(global, wrapperFuncLib);
 import * as segmentsFuncLib from './functions/logic/segments.mjs';
 Object.assign(global, segmentsFuncLib);
 import * as abtestsFuncLib from './functions/logic/abtests.mjs';
@@ -1859,6 +1857,10 @@ app.get('/api/health', async (req, res, next) => {
   res.json({health: 'OK.', message: `Current Version is ${process.env.CURRENT_VERSION}`});
 });
 
+app.use((err, req, res, next) => {
+  console.log('Error caught at endpoint:', req.originalUrl, err);
+  res.status(500).json({ error: err.message || 'Internal Server Error' });
+})
 
 
 export default app;

@@ -47,8 +47,6 @@ app.use(cors(corsOptions));
 
 app.use(bodyParser.json());
 app.use(routes);
-app.use(errorHandler);
-
 
 
 const server = http.createServer(app);

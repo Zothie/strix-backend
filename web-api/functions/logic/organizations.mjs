@@ -73,24 +73,46 @@ export async function updateGameDetails(
       throw new Error("Game ID is required");
     }
 
-    // Construct the updated data object
-    let updatedData = {};
-    if (gameName) updatedData.gameName = gameName;
-    if (gameEngine) updatedData.gameEngine = gameEngine;
-    if (gameIcon) updatedData.gameIcon = gameIcon;
-    if (gameSecretKey) updatedData.gameSecretKey = gameSecretKey;
-    if (apiKeys) updatedData.apiKeys = apiKeys;
+    let game = await Game.findOne({ gameID: gameID });
+    const oldGame = {...game.toObject()}
 
-    updatedData.apiKeys = apiKeys.map((key) => {
-      return {
-       ...key,
-        key: key.key && key.key !== '' ? encryptString(key.key) : key.key
+    // Construct the updated data object
+    if (gameName) game.gameName = gameName;
+    if (gameEngine) game.gameEngine = gameEngine;
+    if (gameIcon) game.gameIcon = gameIcon;
+    if (gameSecretKey) game.gameSecretKey = gameSecretKey;
+
+    function isStringOfAsterisks(str) {
+      return str === Array(str.length + 1).join('*');
+    }
+
+    let tempApiKeys = apiKeys.map(obj => {
+      let temp = obj
+      if (isStringOfAsterisks(temp.key)) {
+        delete temp.key
+      } else {
+        temp.key = temp.key && temp.key !== '' ? encryptString(temp.key) : temp.key
+      }
+      return temp
+    })
+    
+    game.apiKeys = tempApiKeys.map((key) => {
+      let existingObj = game.apiKeys.find(obj => obj.service === key.service)
+      if (existingObj) {
+        return {
+         ...existingObj,
+         ...key,
+        }
+      } else {
+        return {
+          ...key,
+        }
       }
     })
-
+    
     // Update the game details
-    const game = await Game.findOneAndUpdate({ gameID: gameID }, updatedData);
-    handleDefaultCurrencyChange(game, updatedData)
+    await game.save()
+    handleDefaultCurrencyChange(oldGame, game)
 
     // Check if the game exists
     if (!game) {
@@ -102,6 +124,7 @@ export async function updateGameDetails(
 }
 
 async function handleDefaultCurrencyChange(oldGameObj, newGameObj) {
+  const defaultBranch = 'development'
   // Checking if game has any api keys
   try {
     if (oldGameObj.apiKeys && oldGameObj.apiKeys.length > 0) {
@@ -109,69 +132,127 @@ async function handleDefaultCurrencyChange(oldGameObj, newGameObj) {
       // Getting google play services api object
       const gpOld = oldGameObj.apiKeys.find((s) => s.service = 'googleplayservices')
       const gpNew = newGameObj.apiKeys.find((s) => s.service = 'googleplayservices')
+
       // If both missing, then we don't have GP api object
       if (gpOld || gpNew) {
   
         // Compare their currencies
         if (gpOld.secondary !== gpNew.secondary) {
           // If currencies are different, then we need to update all the offers
-          const doc = await Offers.findOne({ gameID: oldGameObj.gameID })
-          const branch = doc.branches.find((b) => b.branch === 'development')
-          let offers = branch.offers.filter(o => !o.removed)
-
-          offers.forEach(async (offer) => {
-            if (
-              (offer.offerPrice && offer.offerPrice.moneyCurr) 
-              || 
-              (offer.offerPrice && offer.offerPrice.targetCurrency === 'entity' && offer.offerPrice.moneyCurr.length > 0)
-            ) {
-              
-              // Checking if we already have this currency in the pricing. If so, just reinsert it at 0
-              if (offer.offerPrice.moneyCurr.some(c => c.cur === gpNew.secondary)) {
-                let currency = 
-                JSON.parse(
-                  JSON.stringify(
-                    offer.offerPrice.moneyCurr.find(c => c.cur === gpNew.secondary)
-                  )
-                );
-                offer.offerPrice.moneyCurr = offer.offerPrice.moneyCurr.filter(c => c.cur!== gpNew.secondary);
-                offer.offerPrice.moneyCurr = offer.offerPrice.moneyCurr.splice(0, 0, currency);
-                console.log('Currency found, result:', offer.offerPrice)
-              } else {
-                if (offer.offerPrice.moneyCurr.length === 0) {
-                  offer.offerPrice.moneyCurr = [{cur: gpNew.secondary, amount: 0}];
+          async function handleOffers() {
+            const doc = await Offers.findOne({ gameID: oldGameObj.gameID })
+            const branch = doc.branches.find((b) => b.branch === defaultBranch)
+            let offers = branch.offers.filter(o => !o.removed)
+  
+            offers.forEach(async (offer) => {
+              if (
+                (offer.offerPrice && offer.offerPrice.moneyCurr) 
+                || 
+                (offer.offerPrice && offer.offerPrice.targetCurrency === 'entity' && offer.offerPrice.moneyCurr.length > 0)
+              ) {
+                
+                // Checking if we already have this currency in the pricing. If so, just reinsert it at 0
+                if (offer.offerPrice.moneyCurr.some(c => c.cur === gpNew.secondary)) {
+                  let currency = 
+                  JSON.parse(
+                    JSON.stringify(
+                      offer.offerPrice.moneyCurr.find(c => c.cur === gpNew.secondary)
+                    )
+                  );
+                  offer.offerPrice.moneyCurr = offer.offerPrice.moneyCurr.filter(c => c.cur!== gpNew.secondary);
+                  offer.offerPrice.moneyCurr = offer.offerPrice.moneyCurr.splice(0, 0, currency);
+                  console.log('Currency found, result:', offer.offerPrice)
                 } else {
-                  offer.offerPrice.moneyCurr = offer.offerPrice.moneyCurr.splice(0, 0, {cur: gpNew.secondary, amount: 0});
+                  if (offer.offerPrice.moneyCurr.length === 0) {
+                    offer.offerPrice.moneyCurr = [{cur: gpNew.secondary, amount: 0}];
+                  } else {
+                    offer.offerPrice.moneyCurr = offer.offerPrice.moneyCurr.splice(0, 0, {cur: gpNew.secondary, amount: 0});
+                  }
+                  console.log('Inserting as no currency found: ', offer.offerPrice)
                 }
-                console.log('Inserting as no currency found: ', offer.offerPrice)
+                console.log('Post update offer', offer.offerID, offer.offerPrice);
+  
               }
-              console.log('Post update offer', offer.offerID, offer.offerPrice);
-
-            }
-          })
-          
-          
-          let pricing = branch.pricing
-          if (pricing.some(c => c.code === gpNew.secondary)) {
-            let currency = 
-            JSON.parse(
-              JSON.stringify(
-                pricing.find(c => c.code === gpNew.secondary)
-              )
-            );
-            pricing = pricing.filter(c => c.code!== gpNew.secondary);
-            pricing = pricing.splice(0, 0, currency);
-          } else {
+            })
             
-            if (pricing.length === 0) {
-              pricing = [{code: gpNew.secondary, base: 1}];
+            let pricing = branch.pricing.currencies
+            if (pricing.some(c => c.code === gpNew.secondary)) {
+              let currency = 
+              JSON.parse(
+                JSON.stringify(
+                  pricing.find(c => c.code === gpNew.secondary)
+                )
+              );
+              pricing = pricing.filter(c => c.code!== gpNew.secondary);
+              pricing = pricing.splice(0, 0, currency);
             } else {
-              pricing = pricing.splice(0, 0, {code: gpNew.secondary, base: 1});
+              
+              if (pricing.length === 0) {
+                pricing = [{code: gpNew.secondary, base: 1}];
+              } else {
+                pricing = pricing.splice(0, 0, {code: gpNew.secondary, base: 1});
+              }
+            }
+            await doc.save()
+          }
+          handleOffers()
+
+          async function handleTests() {
+            const doc = await ABTests.findOne({
+              gameID: oldGameObj.gameID,
+              "branches.branch": defaultBranch,
+            });
+            if (!doc) {
+              console.log("ABTests not found or branch does not exist");
+              return {
+                success: false,
+                message: "ABTests not found or branch does not exist",
+              };
+            }
+            const branchItem = doc.branches.find((b) => b.branch === defaultBranch);
+            let tests = branchItem ? branchItem.tests : null;
+
+            if (tests) {
+              // Iterating through all the tests and find tests with changed offer price
+              tests = tests.map(test => {
+                let subjectObj = JSON.parse(test.subject)
+                if (!test.archived && subjectObj.type === 'offer') {
+                  if (
+                    subjectObj.changedFields.price 
+                    && 
+                    subjectObj.changedFields.price.targetCurrency === 'money'
+                  ) {
+  
+                    // Insert new field to pricing
+                    let pricing = subjectObj.changedFields.price.moneyCurr
+                    if (pricing.some(c => c.cur === gpNew.secondary)) {
+                      let currency = 
+                      JSON.parse(
+                        JSON.stringify(
+                          pricing.find(c => c.cur === gpNew.secondary)
+                        )
+                      );
+                      pricing = pricing.filter(c => c.cur!== gpNew.secondary);
+                      pricing = pricing.splice(0, 0, currency);
+                    } else {
+                      
+                      if (pricing.length === 0) {
+                        pricing = [{cur: gpNew.secondary, amount: 1}];
+                      } else {
+                        pricing = pricing.splice(0, 0, {cur: gpNew.secondary, amount: 1});
+                      }
+                    }
+  
+                  }
+                }
+                test.subject = JSON.stringify(subjectObj)
+                return test
+              })
+              await doc.save()
             }
           }
+          handleTests()
 
-          const result = await doc.save()
-          console.log('Default currency changed, updated offers:', result)
         }
       }
     }

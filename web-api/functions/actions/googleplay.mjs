@@ -50,7 +50,7 @@ async function listExistingIapProducts(gameID) {
     }
   } catch (error) {
     console.error(error);
-    throw new Error();
+    throw new Error(error);
   }
 }
 async function deleteIapProducts(gameID, skuArray) {
@@ -65,11 +65,14 @@ async function deleteIapProducts(gameID, skuArray) {
     });
 
     const result = await gpAPI.inappproducts.batchDelete({
-      requests: deleteRequests,
+        packageName: packageName,
+        resource: {
+            requests:deleteRequests
+        },
     });
   } catch (error) {
     console.error(error);
-    throw new Error();
+    throw new Error(error);
   }
 }
 
@@ -79,7 +82,7 @@ export async function uploadIapConfig(gameID, cookedContent) {
 
     const existingInnapps = (await listExistingIapProducts(gameID)) || [];
 
-    console.log(existingInnapps[0].prices)
+    // console.log('existingInnapps', existingInnapps.map((iap) => iap.sku))
 
     if (existingInnapps.length > 0) {
       // If there are any existing IAPs, we need to get the IDs that are now must be deleted
@@ -87,41 +90,48 @@ export async function uploadIapConfig(gameID, cookedContent) {
       const existingSku = existingInnapps
         .map((iap) => iap.sku)
         .filter((id) => id.startsWith("strix_"));
-      const diffIapSku = cookedContent.map((iap) => iap.sku);
+      const diffIapSku = cookedContent.map((iap) => iap.asku);
       const toDelete = existingSku.filter((id) => !diffIapSku.includes(id));
 
       if (toDelete.length > 0) {
         await deleteIapProducts(gameID, toDelete);
       }
     }
-
     
+    const funnyCountries = ['CL', 'JP']
+    function makePriceMicro(price, regionCode) {
+        let safePrice = parseFloat(parseFloat(price).toFixed(2))
+        if (funnyCountries.includes(regionCode)) {
+            // Handle countries that can't have decimal prices
+            safePrice = parseFloat(parseFloat(price).toFixed(0))
+        }
+        const result = parseInt(safePrice * 1e6).toString()
+        // console.log('Region:', regionCode, 'Input price: ', safePrice, 'Result: ', result)
+        return result;
+    }
+
     // Transforming the config to the google format
     const updateRequests = cookedContent.map((iap) => {
-      let asku = iap.asku;
-      if (!asku || asku === "") {
-        asku = generateASKU(gameID, iap.id);
-      }
       return {
         autoConvertMissingPrices: true,
         allowMissing: true,
         latencyTolerance: "PRODUCT_UPDATE_LATENCY_TOLERANCE_LATENCY_TOLERANT",
         packageName: packageName,
-        sku: asku,
+        sku: iap.asku,
         inappproduct: {
             packageName: packageName,
-            sku: asku,
+            sku: iap.asku,
             status: "active",
             purchaseType: "managedUser",
             defaultLanguage: "en-US",
             defaultPrice: {
-              priceMicros: (iap.pricing.moneyCurr[0].amount * 1e6).toString(),
-              currency: iap.pricing.moneyCurr[0].cur,
+              priceMicros: makePriceMicro(iap.pricing.moneyCurr[0].value, iap.pricing.moneyCurr[0].region),
+              currency: iap.pricing.moneyCurr[0].currency,
             },
-            prices: iap.pricing.moneyCurr.reduce((acc, curr) => {
-              acc[curr.cur] = {
-                priceMicros: (curr.amount * 1e6).toString(),
-                currency: curr.cur,
+            prices: iap.pricing.moneyCurr.reduce((acc, region) => {
+              acc[region.region] = {
+                priceMicros: makePriceMicro(region.value, region.region),
+                currency: region.currency,
               };
               return acc;
             }, {}),
@@ -134,11 +144,6 @@ export async function uploadIapConfig(gameID, cookedContent) {
         },
       };
     });
-    console.log({
-        packageName: packageName,
-        resource: updateRequests,
-      });
-    console.log(updateRequests);
 
     try {
       const updateReq = await gpAPI.inappproducts.batchUpdate({
@@ -147,26 +152,12 @@ export async function uploadIapConfig(gameID, cookedContent) {
             requests: updateRequests
         },
       });
-      console.log(updateReq);
-    } catch (e) {
-      console.error("Error while uploading IAP config to GP: ", e);
+    } catch (error) {
+      throw error;
     }
 
   } catch (error) {
-    console.error(error);
+    throw error;
   }
 }
 
-function generateASKU(gameID, offerID) {
-  const prefix = "strix_";
-  const characters = "0123456789abcdefghijklmnopqrstuvwxyz";
-  let result = "";
-  for (let i = 0; i < 20; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-
-  // Save newly created asku to db
-  updateOfferASKU(gameID, offerID, prefix + result);
-
-  return prefix + result;
-}

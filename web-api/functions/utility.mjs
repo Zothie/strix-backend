@@ -609,6 +609,20 @@ export async function finishUserOnboarding({ publisherName, email, username, job
   };
 }
 
+export function generateASKU(gameID, offerID) {
+  const prefix = "strix_";
+  const characters = "0123456789abcdefghijklmnopqrstuvwxyz";
+  let result = "";
+  for (let i = 0; i < 20; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+
+  // Save newly created asku to db
+  updateOfferASKU(gameID, offerID, prefix + result);
+
+  return prefix + result;
+}
+
 
 
 // Generate secret hash with crypto to use for encryption

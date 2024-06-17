@@ -55,7 +55,7 @@ export async function pushChangesToBranch(gameID, sourceBranch, targetBranch) {
                 branches: { $elemMatch: { branch: sourceBranch } }, _id: 0 
             }
         ).lean();
-        console.log('Node Model:', nodeModel.branches.find(b => b.branch === sourceBranch).planningTypes);
+        // console.log('Node Model:', nodeModel.branches.find(b => b.branch === sourceBranch).planningTypes);
         await NodeModel.findOneAndUpdate(
             {
               gameID: gameID,
@@ -250,25 +250,29 @@ export async function pushChangesToBranch(gameID, sourceBranch, targetBranch) {
         console.log('Done moving segments');
         console.log('-------END MOVING DB CONTENT-------');
     }
-    await pushChanges();
+    // await pushChanges();
 
 
-    console.log('-------START COOKING CONTENT-------');
-    console.log('Cooking events...');
-    // await cookAnalyticsEvents(gameID, sourceBranch)
-    console.log('Offers cooked');
-
-    console.log('Cooking offers...');
-    await cookOffers(gameID, sourceBranch);
-
-    console.log('Cooking entities...');
-    // await cookEntities(gameID, sourceBranch)
-    console.log('Entities cooked')
-    console.log('-------END COOKING CONTENT-------');
-
+    try {
+        console.log('-------START COOKING CONTENT-------');
+        console.log('Cooking events...');
+        // await cookAnalyticsEvents(gameID, sourceBranch)
+        console.log('Offers cooked');
+    
+        console.log('Cooking offers...');
+        await cookOffers(gameID, sourceBranch);
+    
+        console.log('Cooking entities...');
+        // await cookEntities(gameID, sourceBranch)
+        console.log('Entities cooked')
+        console.log('-------END COOKING CONTENT-------');
+    } catch (error) {
+       throw error;
+    }
 
   } catch (error) {
     console.error("Error cooking content:", error);
+    throw error;
   }
 }
 async function cookAnalyticsEvents(gameID, branch) {
@@ -338,6 +342,11 @@ async function cookOffers(gameID, branch) {
   }
 
   let cookedConfig = config.map((offer, i) => {
+    let asku = associatedSKUs.find((sku) => sku.offerID === offer.offerID)?.sku;
+    if (!asku || asku === "") {
+      asku = generateASKU(gameID, offer.offerID);
+    }
+
     return {
       id: offer.offerID,
       name: offer.offerInGameName,
@@ -350,7 +359,7 @@ async function cookOffers(gameID, branch) {
       triggers: offer.offerTriggers,
       content: offer.content,
       pricing: offer.offerPrice,
-      asku: associatedSKUs.find((sku) => sku.offerID === offer.offerID)?.sku,
+      asku: asku,
     };
   });
 
@@ -362,62 +371,100 @@ async function cookOffers(gameID, branch) {
       if (Array.isArray(pricingTable.regions) && pricingTable.regions.length > 0) {
         // Applying pricing to the offer
 
-        // Checking if offer has it's own pricing
-        // let offerPricing = currencies
-        //   .map((curr, j) => {
-        //     const offerCurr = offer.pricing.moneyCurr.find(
-        //       (c) => c.cur === curr.code
-        //     );
-        //     if (offerCurr) {
-        //       // Offer pricing is #1 priority
-        //       return {
-        //         cur: offerCurr.cur,
-        //         amount: offerCurr.amount,
-        //       };
-        //     } else {
-        //       // If there is no such currency in offer, try to auto calculate it
-        //       // based on the pricing table
-        //       const tableCurr = pricingTable.regions.find((c) => c.code === curr.code);
-        //       if (tableCurr) {
-        //         return {
-        //           cur: tableCurr.code,
-        //           amount: scaleCurrencyToPricingTable(offer, curr.code),
-        //         };
-        //       } else {
-        //         // If no such currency in pricing table, return null
-        //         return null;
-        //       }
-        //     }
-
-        //     // Cleanup possible "nulls"
-        //   })
-        //   .filter(Boolean);
-
+        // Checking if offer has it's own pricing and applying what it has
         let offerPricing = offer.pricing.moneyCurr.map((curr) => {
+
+            // console.log('Iterating currency: ', curr)
+
             // Getting all regions using that currency
             const currencyRegions = getCurrencyCountries(curr.cur)
+            // console.log('Currency regions: ', currencyRegions)
 
             // Getting the default currency amount from pricing table
-            const defaultCurrencyPrice = pricingTable.currencies.find(c => c.code === curr.cur)
+            const defaultCurrencyPrice = pricingTable.currencies.find(c => c.code === curr.cur).base
+            // console.log('Default currency amount: ', defaultCurrencyPrice)
 
             // Getting regional pricing from the table
-            const tableRegionalPrices = pricingTable.regions.filter(r => currencyRegions.map(r => r.code).includes(curr.cur))
-            
+            const tableRegionalPrices = pricingTable.regions.filter(region => currencyRegions.map(r => r.code).includes(region.code))
+            // console.log('Table regional prices: ', tableRegionalPrices)
+
+            const discount = offer.pricing.moneyCurr.discount
+
             // Making combined regional pricing by iterating through all regions
             // and seeking any changes in the pricing table for them
             // and also applying difference calculations
-            const regionalPrices = tableRegionalPrices.map(r => {
-                if (r.base) {
-                    const defaultDifference = ((parseFloat(r.base) - parseFloat(defaultCurrencyPrice)) / parseFloat(defaultCurrencyPrice));
-                    const resultPrice = defaultDifference * curr.amount + curr.amount
+            // console.log('Offer curr amount:', curr.amount)
+            const regionalPrices = currencyRegions.map(r => {
+
+                const pricingTableValue = tableRegionalPrices.find(tr => tr.code === r.code)?.base
+
+                if (pricingTableValue) {
+                    // If we have any pricing for this region in particular in pricing table, scale & use it
+                    const defaultDifference = Math.abs(parseFloat(pricingTableValue) / parseFloat(defaultCurrencyPrice));
+                    let resultPrice = 0
+                    if (defaultDifference !== 0) {
+                        resultPrice = defaultDifference * curr.amount;
+                    } else {
+                        resultPrice = curr.amount;
+                    }
+                    // console.log('Difference for region ', r.code, 'is', defaultDifference, 'from', pricingTableValue, 'and', defaultCurrencyPrice, 'Result price:', resultPrice)
+                    if (discount && discount !== 0) {
+                        resultPrice = resultPrice - (resultPrice * discount / 100)
+                    }
                     return {
-                        cur: r.code,
-                        amount: resultPrice
+                        region: r.code,
+                        value: resultPrice,
+                        currency: r.currency,
+                    }
+                } else {
+                    // If we dont have any pricing for this region, make it's price a currency value instead
+                    let resultPrice = curr.amount
+                    if (discount && discount !== 0) {
+                        resultPrice = resultPrice - (resultPrice * discount / 100)
+                    }
+                    return {
+                        region: r.code,
+                        value: resultPrice,
+                        currency: r.currency,
                     }
                 }
             })
-            console.log(regionalPrices)
+            return regionalPrices;
         })
+        offerPricing = offerPricing.flat();
+
+        // Filling missing regional pricing
+        const arrayOfRegions = Object.keys(regions).map(r => ({code: r, ...regions[r]}))
+        // console.log(arrayOfRegions)
+        offerPricing = offerPricing.concat(
+            arrayOfRegions
+            .filter(region => offerPricing.map(p => p.region).includes(region.code) === false)
+            .map(r => {
+                // Getting the default currency amount from pricing table
+                const defaultCurrencyPrice = pricingTable.currencies.find(c => c.code === offer.pricing.moneyCurr[0].cur).base
+                // Getting the localized price (of any currency) from table
+                const regionalPrice = pricingTable.regions.find(tr => tr.code === r.code)?.base
+                if (regionalPrice === undefined) return null
+
+                const discount = offer.pricing.moneyCurr.discount
+                
+                // Finding the multiplicator we need to apply to the regional price for it to match the scale
+                const defaultDifference = Math.abs(parseFloat(regionalPrice) / parseFloat(defaultCurrencyPrice));
+                let scaledPrice = defaultDifference * offer.pricing.moneyCurr[0].amount
+                if (discount && discount !== 0) {
+                    scaledPrice = scaledPrice - (scaledPrice * discount / 100)
+                }
+                // console.log('--------------------------------------------------------')
+                // console.log('Missing price for region', r.name, r.code, r.currency)
+                // console.log('def price:', defaultCurrencyPrice, 'regional:', regionalPrice, 'diff:', defaultDifference, 'offer:', offer.pricing.moneyCurr[0].amount, 'Result:', scaledPrice)
+                // console.log('--------------------------------------------------------')
+                return {
+                    region: r.code,
+                    value: scaledPrice,
+                    currency: r.currency,
+                }
+            }).filter(Boolean)
+        )
 
         offer.pricing.moneyCurr = offerPricing;
       }
@@ -430,9 +477,6 @@ async function cookOffers(gameID, branch) {
       if (regions[r].currency === code) {
         array.push({code: r, ...regions[r]});
       }
-    }
-    if (array.length === 1) {
-      return [];
     }
     return array;
   }
@@ -469,7 +513,7 @@ async function cookOffers(gameID, branch) {
       (o) =>
         // Keeping only the offers that have money pricing & the base currency isn't 0
         o.pricing.targetCurrency === "money" &&
-        o.pricing.moneyCurr[0].amount > 0
+        o.pricing.moneyCurr.some(v => v.value > 0)
     )
     .map((o) => {
       let temp = { ...o };
@@ -492,13 +536,7 @@ async function cookOffers(gameID, branch) {
       // Destroying currencies with 0 value amount, otherwise google play won't accept it
       temp.pricing.moneyCurr = temp.pricing.moneyCurr
         .map((c) => {
-          if (c.amount === 0) return null;
-
-          // Apply discount
-          if (temp.pricing.discount && temp.pricing.discount > 0) {
-            c.amount = c.amount * (1 - temp.pricing.discount / 100);
-          }
-
+          if (c.value === 0) return null;
           return c;
         })
         .filter(Boolean);
@@ -506,10 +544,15 @@ async function cookOffers(gameID, branch) {
     });
 
   // Syncing with Google Play IAPs
-//   await uploadIapConfig(gameID, realMoneyOffers);
+  try {
+    await uploadIapConfig(gameID, realMoneyOffers);
+  } catch (error) {
+    throw error;
+  }
 
   // Uploading all offers to the DB
   //   insertData("offers", cookedConfig);
+  return {success: true}
 }
 async function cookEntities(gameID, branch) {
   const localizationTable = await getLocalization(gameID, branch, "entities");
