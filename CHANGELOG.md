@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 2.2.0
+2024-06-18
+
+### Features
+
+- added autocreating users & permissions to rethinkdb, fixed google play priceMicro being building wrong (001523dd8c5dcb4d6c381a1a5541fb6c46f5a140)
+
 ## 2.1.1
 2024-06-18
 
