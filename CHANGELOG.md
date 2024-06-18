@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 2.1.1
+2024-06-18
+
+### Fixes
+
+- fixed server.mjs path (0fac6f895fad555ef6708352e98550142ed7fcd5)
+
 ## 2.1.0
 2024-06-17
 
