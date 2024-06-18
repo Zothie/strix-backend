@@ -1423,3 +1423,11 @@ export async function getGameServiceAPIObject(gameID, service) {
     throw error;
   }
 }
+
+export async function getGameDocumentIdAndKey(gameID) {
+  const game = await Game.findOne(
+    {gameID},
+    "_id gameSecretKey"
+  ).lean();
+  return {id: game._id.toString(), secretKey: game.gameSecretKey};
+}

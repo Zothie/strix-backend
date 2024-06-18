@@ -56,7 +56,7 @@ app.use(
 
 app.post("/api/v1/analytics/init", (req, res) => {
   console.log("Incoming request to /api/v1/analytics/init", req.body);
-  res.status(200).json({success: true})
+  res.status(200).json({success: true, message: 'OK'})
 });
 
 app.post("/api/v1/analytics/designEvent", (req, res) => {

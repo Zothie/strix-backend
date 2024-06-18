@@ -340,7 +340,7 @@ async function cookPWTemplates(gameID, branch) {
   })
 
   // Uploading all offers to the DB
-  insertData("stattemplates", cookedConfig);
+  insertData("stattemplates", cookedConfig, gameID);
   return {success: true}
 }
 async function cookABTests(gameID, branch) {
@@ -363,7 +363,7 @@ async function cookABTests(gameID, branch) {
   })
   
   // Uploading all offers to the DB
-  insertData("abtests", cookedConfig);
+  insertData("abtests", cookedConfig, gameID);
   return {success: true}
 }
 async function cookAnalyticsEvents(gameID, branch) {
@@ -381,8 +381,8 @@ async function cookAnalyticsEvents(gameID, branch) {
       }),
     };
   });
-  await insertData("analytics", cookedConfig);
-  const result = await getData("strix-eu", "analytics");
+  await insertData("analytics", cookedConfig, gameID);
+  // const result = await getData("strix-eu", "analytics");
 }
 async function cookOffers(gameID, branch) {
   const localizationTable = await getLocalization(gameID, branch, "offers");
@@ -619,7 +619,7 @@ async function cookOffers(gameID, branch) {
   }
 
   // Uploading all offers to the DB
-  insertData("offers", cookedConfig);
+  insertData("offers", cookedConfig, gameID);
   return {success: true}
 }
 async function cookEntities(gameID, branch) {

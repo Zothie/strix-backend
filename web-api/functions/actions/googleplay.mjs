@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 google.options({ headers: { "Content-Type": "application/json" } });
+import Decimal from "decimal.js";
 
 async function connectToService(gameID) {
   try {
@@ -100,14 +101,14 @@ export async function uploadIapConfig(gameID, cookedContent) {
     
     const funnyCountries = ['CL', 'JP']
     function makePriceMicro(price, regionCode) {
-        let safePrice = parseFloat(parseFloat(price).toFixed(2))
-        if (funnyCountries.includes(regionCode)) {
-            // Handle countries that can't have decimal prices
-            safePrice = parseFloat(parseFloat(price).toFixed(0))
-        }
-        const result = parseInt(safePrice * 1e6).toString()
-        // console.log('Region:', regionCode, 'Input price: ', safePrice, 'Result: ', result)
-        return result;
+      let safePrice = new Decimal(price).toDecimalPlaces(2);
+      if (funnyCountries.includes(regionCode)) {
+        // Handle countries that can't have decimal prices
+        safePrice = new Decimal(price).toDecimalPlaces(0);
+      }
+      const result = safePrice.times(1e6).toFixed(0);
+      console.log('Region:', regionCode, 'Input price: ', safePrice.toString(), 'Result: ', result)
+      return result;
     }
 
     // Transforming the config to the google format

@@ -73,22 +73,7 @@ export async function generateAvgProfile({
 
   const segments = ['everyone', ...filterSegments]
 
-  function clamp(value, min, max) {
-    return Math.min(Math.max(value, min), max);
-  }
-  function getSampleSize(totalSampleSize, confidenceLevel) {
-    const n = clamp(totalSampleSize, 1, totalSampleSize);
-
-    const expectedProportion = 0.5;
-    const marginOfError = 0.05;
-
-    const z = confidenceLevel === 0.95 ? 1.96 : 2.58;
-
-    let sampleSize = Math.ceil(Math.pow((z * Math.sqrt(expectedProportion * (1 - expectedProportion))) / marginOfError, 2));
-    sampleSize = clamp(sampleSize, 1, n);
-
-    return sampleSize;
-  }
+  
 
   const sampleSize = getSampleSize(salesCount, 0.999)
   
@@ -145,6 +130,20 @@ export async function generateAvgProfile({
     };
   });
   return avgProfile;
+}
+
+export function getSampleSize(totalSampleSize, confidenceLevel) {
+  const n = clamp(totalSampleSize, 1, totalSampleSize);
+
+  const expectedProportion = 0.5;
+  const marginOfError = 0.05;
+
+  const z = confidenceLevel === 0.95 ? 1.96 : 2.58;
+
+  let sampleSize = Math.ceil(Math.pow((z * Math.sqrt(expectedProportion * (1 - expectedProportion))) / marginOfError, 2));
+  sampleSize = clamp(sampleSize, 1, n);
+
+  return sampleSize;
 }
 
 export function arraySum(numbers) {
