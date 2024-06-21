@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 2.2.1
+2024-06-21
+
+### Fixes
+
+- small bug in rethinkdb data insert (c77a2dded007487621fb371c0b0eb9484f23fe25)
+
 ## 2.2.0
 2024-06-18
 
