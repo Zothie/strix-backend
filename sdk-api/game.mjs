@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import { Schema, model } from "mongoose";
 import { Kafka } from "kafkajs";
 
-import express from "express";
+import express, { response } from "express";
 import cors from "cors";
 import mongoose from "mongoose";
 import bodyParser from "body-parser";
@@ -54,31 +54,83 @@ app.use(
   })
 );
 
-app.post("/api/v1/analytics/init", (req, res) => {
-  console.log("Incoming request to /api/v1/analytics/init", req.body);
-  res.status(200).json({success: true, message: 'OK'})
-});
+app.post("/api/v1/analytics/sendEvent", async (req, res) => {
+  const { device, secret, session, platform, payload } = req.body;
 
-app.post("/api/v1/analytics/designEvent", (req, res) => {
-  const { device, secret, session, payload } = req.body;
+  console.log("Incoming request to /api/v1/analytics/sendEvent", req.body);
+
   if (!secret)
-    return res.status(400).json({ message: "API key is required" });
+    return res
+      .status(400)
+      .json({ success: false, message: "API key is required" });
   if (!device)
-    return res.status(400).json({ message: "Device ID is required" });
+    return res
+      .status(400)
+      .json({ success: false, message: "Device ID is required" });
   if (!session)
-    return res.status(400).json({ message: "Session ID is required" });
+    return res
+      .status(400)
+      .json({ success: false, message: "Session ID is required" });
   if (!payload)
-    return res.status(400).json({ message: "Payload is required" });
-  res.send("Hello World!");
+    return res
+      .status(400)
+      .json({ success: false, message: "Payload is required" });
+  if (!platform)
+    return res
+      .status(400)
+      .json({ success: false, message: "Platform is required" });
+
+  const gameId = await getGameIdBySecret(secret);
+  if (!gameId) {
+    res.status(400).json({ success: false, message: "Invalid secret" });
+    return;
+  }
+
+  if (payload.length === 1) {
+    if (payload[0].type === 'newSession') { 
+      console.log('Acquired new session', { success: true, message: "OK", data: gameId });
+      res.status(200).json({ success: true, message: "OK", data: gameId });
+      return
+    }
+  }
+  payload.forEach((event) => {
+    switch (event.type) {
+      case "newSession":
+        
+        break;
+      default:
+        res
+          .status(500)
+          .json({
+            success: false,
+            message: "Wrong event type provided or Internal Server Error",
+          });
+        break;
+    }
+  });
+
+  // res.status(200).json({ success: true, message: "OK" });
 });
 
-
+export async function getGameIdBySecret(secret) {
+  const game = await Game.findOne({ gameSecretKey: secret }, "_id").lean();
+  if (game) {
+    return game._id.toString();
+  } else {
+    return null;
+  }
+}
 
 // {
-//  "device": "sdfds54246514", 
-//  "secret": "sdfdsfsdf", 
+//  "device": "sdfds54246514",
+//  "secret": "sdfdsfsdf",
 //  "session": "sdfsdc",
- 
+//  "language": "en",
+//  "platform:" "Windows",
+//  "gameVersion:" "1.0",
+//  "engineVersion:" "1.0",
+//  "build": "development",
+
 //  "payload": [
 //    {
 //      "time": 13516513216,
@@ -91,10 +143,6 @@ app.post("/api/v1/analytics/designEvent", (req, res) => {
 //    },
 //  ]
 // }
-
-
-
-
 
 app.get("/api/health", async (req, res, next) => {
   res.json({

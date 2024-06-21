@@ -1,7 +1,13 @@
 import rethinkdb from "rethinkdb";
 
 let dbConnection = null;
-const tablesNamespaces = ["analytics", "offers", "entities", "segments", "abtests", "stattemplates"];
+const tablesNamespaces = [
+  "analytics",
+  "offers",
+  "entities",
+  "abtests",
+  "stattemplates",
+];
 
 export function checkDBConnection() {
   return dbConnection;
@@ -23,7 +29,7 @@ async function connectToDatabase() {
     const connection = await rethinkdb.connect({
       host: "localhost",
       port: 28015,
-      user: 'admin',
+      user: "admin",
       password: process.env.RETHINK_PASSWORD,
     });
     console.log("Connected to RethinkDB");
@@ -35,13 +41,19 @@ async function connectToDatabase() {
   }
 }
 
-async function createTable(connection, dbName, tableName, userName, userPassword) {
+async function createTable(
+  connection,
+  dbName,
+  tableName,
+  userName,
+  userPassword
+) {
   try {
     // Check if database exists
     const dbList = await rethinkdb.dbList().run(connection);
     if (!dbList.includes(dbName)) {
       await rethinkdb.dbCreate(dbName).run(connection);
-      await createAndAssignUser(connection, dbName, userName, userPassword)
+      await createAndAssignUser(connection, dbName, userName, userPassword);
       console.log(`Database ${dbName} created`);
     }
 
@@ -58,37 +70,77 @@ async function createTable(connection, dbName, tableName, userName, userPassword
   }
 }
 async function createAndAssignUser(connection, dbName, userName, userPassword) {
-  // Create new user for the created database
-  const create = await rethinkdb.db("rethinkdb").table('users').insert({id: userName, password: userPassword}).run(connection);
-  console.log('Attempting to create user', userName, 'result:', create)
-  // Grant read permissions to this user
-  const grant = await rethinkdb.db(dbName).grant(userName, {read: true, write: false, config: false}).run(connection);
-  console.log('Attempting to grant permissions to user', userName, 'result:', grant)
+  try {
+    // Create new user for the created database
+    const create = await rethinkdb
+      .db("rethinkdb")
+      .table("users")
+      .insert({ id: userName, password: userPassword })
+      .run(connection);
+    console.log("Attempting to create user", userName, "result:", create);
+    // Grant read permissions to this user
+    const grant = await rethinkdb
+      .db(dbName)
+      .grant(userName, { read: true, write: false, config: false })
+      .run(connection);
+    console.log(
+      "Attempting to grant permissions to user",
+      userName,
+      "result:",
+      grant
+    );
+  } catch (error) {
+    throw error;
+  }
+}
+export async function updateUserPassword(userName, userPassword) {
+  try {
+    const update = await rethinkdb
+      .db("rethinkdb")
+      .table("users")
+      .update({ id: userName }, { password: userPassword })
+      .run(dbConnection);
+    console.log(`User ${userName} password updated. Result: ${update}`);
+  } catch (err) {
+    console.error("Error updating user password:", err);
+  }
 }
 
 export async function insertData(tableName, body, gameID) {
-  // 
+  //
   // All inbound data must be in the following format: [ { id: 1, ...object }, { id: 2, ...object },... ]
   // Here we make a diff, removing the data that is not present in the current data, and inserting the new data.
   try {
 
+    // Find checksums of all documents we want to insert
+    const bodyWithChecksum = body.map(document => {
+      return {
+       ...document,
+        checksum: calculateChecksum(document)
+      }
+    })
+
+
     // Always try to populate the DB for this game
     // in case this is the first time the table is being used
-    const {id, secretKey} = await getGameDocumentIdAndKey(gameID)
+    const { id, secretKey } = await getGameDocumentIdAndKey(gameID);
     for (const tableName of tablesNamespaces) {
       const dbName = `${id}`;
       await createTable(dbConnection, dbName, tableName, id, secretKey);
     }
-    
 
     // Releasing the updates on all regions
     if (tablesNamespaces.includes(tableName)) {
       const dbName = `${id}`;
 
-      let result
+      let result;
 
       // Getting docs count in the table so we either just insert, or do more complex update
-      const count = await rethinkdb.db(dbName).table(tableName).count().run(dbConnection);
+      const count = await rethinkdb
+        .db(dbName)
+        .table(tableName)
+        .count()
+        .run(dbConnection);
 
       if (count > 0) {
         // Get the current data from the table
@@ -99,7 +151,7 @@ export async function insertData(tableName, body, gameID) {
           .run(dbConnection);
 
         // Find the IDs that are absent in the new data and need to be removed from the table
-        const newData = body.map((item) => {
+        const newDataIds = body.map((item) => {
           const existingItemIndex = currentData.findIndex(
             (existingItem) => existingItem.id === item.id
           );
@@ -112,44 +164,36 @@ export async function insertData(tableName, body, gameID) {
           }
         });
 
-        // Diff remove data
+        // Find IDs to remove from the table as they are not present in the new data
         const idsToRemove = currentData
-          .filter((item) => !newData.some((newItem) => newItem.id === item.id))
+          .filter((item) => !newDataIds.some((newItem) => newItem.id === item.id))
           .map((item) => item.id);
-        
-        result = await rethinkdb.db(dbName).table(tableName)
-        .forEach(doc => {
-          return rethinkdb.branch(
-              rethinkdb.expr(idsToRemove).contains(doc('id')),
-              rethinkdb.db(dbName).table(tableName).get(doc('id')).delete(),
-              rethinkdb.db(dbName).table(tableName).insert(body, {conflict: 'replace'})
-          );
-        }).run(dbConnection);
+
+        // Make diff changes
+        result = await rethinkdb
+          .db(dbName)
+          .table(tableName)
+          .forEach((doc) => {
+            return rethinkdb.branch(
+              rethinkdb.expr(idsToRemove).contains(doc("id")),
+              rethinkdb.db(dbName).table(tableName).get(doc("id")).delete(),
+              rethinkdb
+                .db(dbName)
+                .table(tableName)
+                .insert(bodyWithChecksum, { conflict: "replace" })
+            );
+          })
+          .run(dbConnection);
       } else {
         result = await rethinkdb
-        .db(dbName)
-        .table(tableName)
-        .insert(body, { conflict: "replace" })
-        .run(dbConnection);
+          .db(dbName)
+          .table(tableName)
+          .insert(bodyWithChecksum, { conflict: "replace" })
+          .run(dbConnection);
       }
 
-      // await rethinkdb
-      //   .db(dbName)
-      //   .table(tableName)
-      //   .getAll(...idsToRemove)
-      //   .delete()
-      //   .run(dbConnection);
-
-      // // Diff insert new data
-      // const result = await rethinkdb
-      //   .db(dbName)
-      //   .table(tableName)
-      //   .insert(body, { conflict: "replace" })
-      //   .run(dbConnection);
-
-      // Make sure the data is saved to the persistent storage 
+      // Make sure the data is saved to the persistent storage
       rethinkdb.db(dbName).table(tableName).sync().run(dbConnection);
-
 
       console.log(
         "Data inserted into:",
@@ -158,8 +202,6 @@ export async function insertData(tableName, body, gameID) {
         "\nResult:",
         result
       );
-
-
     }
   } catch (err) {
     console.error("Error inserting data:", err);
@@ -177,4 +219,16 @@ export async function getData(dbName, tableName) {
   } catch (err) {
     console.error("Error getting data:", err);
   }
+}
+
+function calculateChecksum(jsonDocument) {
+  // We also need to calculate the checksum of the new body so the client can check it before updating
+  const jsonString = JSON.stringify(jsonDocument);
+
+  let checksum = 0;
+  for (let i = 0; i < jsonString.length; i++) {
+      checksum += jsonString.charCodeAt(i);
+  }
+
+  return checksum;
 }

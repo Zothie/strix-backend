@@ -336,6 +336,9 @@ export async function revokeGameKey(gameID) {
     });
     if (!game) {
       return { success: false, message: "Game not found" };
+    } else {
+      // Updating user for this game right now
+      await updateUserPassword(game._id, game.gameSecretKey);
     }
 
     return {

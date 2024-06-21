@@ -377,6 +377,7 @@ async function cookAnalyticsEvents(gameID, branch) {
           name: v.valueName,
           format: v.valueFormat,
           method: v.valueCountMethod,
+          id: v._id.toString(),
         };
       }),
     };
