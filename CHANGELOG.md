@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 2.3.0
+2024-06-24
+
+### Features
+
+- fixes & deploy update (07e853f71cf4e014daecd50bc6c7eab1b5a99eae)
+
 ## 2.2.1
 2024-06-21
 
