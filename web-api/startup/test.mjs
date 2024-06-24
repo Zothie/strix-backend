@@ -454,7 +454,7 @@ async function populatePlayerWarehouse_brawlDemo(gameID, branchName) {
   );
 
   const res = await PWplayers.deleteMany({
-    gameID: processGameID(gameID),
+    gameID: isDemoGameID(gameID),
     branch: branchName,
   });
   console.log("Deleted players", res);

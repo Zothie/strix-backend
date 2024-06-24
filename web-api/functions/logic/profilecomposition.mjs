@@ -135,7 +135,181 @@ export async function getProfileComposition(
       const queryConditions = [];
 
       for (const filter of filters) {
-        // Filtering conditions omitted for brevity
+        if (filter.condition) {
+          if (filter.condition === "and") {
+            queryConditions.push({ $and: [] });
+          } else if (filter.condition === "or") {
+            queryConditions.push({ $or: [] });
+          }
+        } else {
+          const targetElementPath = `elements.${getTemplateType(
+            filter.templateID
+          )}.elementID`;
+          const targetValuePath = `elements.${getTemplateType(
+            filter.templateID
+          )}.elementValue`;
+
+          let condition = {};
+          let formattedValue = filter.filterValue;
+          switch (filter.filterCondition) {
+            case "is":
+              formattedValue = filter.filterValue.toString();
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: formattedValue,
+                  },
+                },
+              };
+              break;
+            case "is not":
+              formattedValue = filter.filterValue.toString();
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: { $ne: formattedValue },
+                  },
+                },
+              };
+              break;
+            case "contains":
+              formattedValue = filter.filterValue.toString();
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: { $regex: formattedValue, $options: "i" },
+                  },
+                },
+              };
+              break;
+            case "starts with":
+              formattedValue = filter.filterValue.toString();
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: {
+                      $regex: `^${formattedValue}`,
+                      $options: "i",
+                    },
+                  },
+                },
+              };
+              break;
+            case "ends with":
+              formattedValue = filter.filterValue.toString();
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: {
+                      $regex: `${formattedValue}$`,
+                      $options: "i",
+                    },
+                  },
+                },
+              };
+              break;
+            case ">":
+              formattedValue = parseFloat(filter.filterValue);
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: { $gt: formattedValue },
+                  },
+                },
+              };
+              break;
+            case "<":
+              formattedValue = parseFloat(filter.filterValue);
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: { $lt: formattedValue },
+                  },
+                },
+              };
+              break;
+            case ">=":
+              formattedValue = parseFloat(filter.filterValue);
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: { $gte: formattedValue },
+                  },
+                },
+              };
+              break;
+            case "<=":
+              formattedValue = parseFloat(filter.filterValue);
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: { $lte: formattedValue },
+                  },
+                },
+              };
+              break;
+            case "=":
+              formattedValue = parseFloat(filter.filterValue);
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: formattedValue,
+                  },
+                },
+              };
+              break;
+            case "!=":
+              formattedValue = parseFloat(filter.filterValue);
+              condition = {
+                [`elements.${getTemplateType(filter.templateID)}`]: {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: { $ne: formattedValue },
+                  },
+                },
+              };
+              break;
+            case "dateRange":
+              const [startDate, endDate] = filter.filterValue.map(
+                (date) => new Date(date)
+              );
+              condition = {
+                "elements.analytics": {
+                  $elemMatch: {
+                    elementID: filter.templateID,
+                    elementValue: { $gte: startDate, $lte: endDate },
+                  },
+                },
+              };
+              break;
+            default:
+              continue;
+          }
+
+          if (
+            queryConditions.length > 0 &&
+            queryConditions[queryConditions.length - 1].$and
+          ) {
+            queryConditions[queryConditions.length - 1].$and.push(condition);
+          } else if (
+            queryConditions.length > 0 &&
+            queryConditions[queryConditions.length - 1].$or
+          ) {
+            queryConditions[queryConditions.length - 1].$or.push(condition);
+          } else {
+            queryConditions.push(condition);
+          }
+        }
       }
 
       const baseSegmentFilter = {
