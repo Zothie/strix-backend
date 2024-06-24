@@ -29,289 +29,318 @@ export async function pushChangesToBranch(gameID, sourceBranch, targetBranch) {
     throw new Error("RethinkDB connection is not established");
 
   try {
+    console.log("----------------COOK CONTENT----------------");
+    console.log("Game ID: " + gameID);
+    console.log("Source: " + sourceBranch);
+    console.log("Target: " + targetBranch);
 
-    console.log('----------------COOK CONTENT----------------')
-    console.log('Game ID: '+ gameID);
-    console.log('Source: '+ sourceBranch);
-    console.log('Target: '+ targetBranch);
-
-    // 
+    //
     // Apply everything in the source branch to the target branch
-    // 
+    //
     async function pushChanges() {
+      console.log("-------START MOVING DB CONTENT-------");
 
-        console.log('-------START MOVING DB CONTENT-------');
-    
-    
-        // 
-        // Nodes
-        // 
-        console.log('Moving nodes...');
-        const nodeModel = await NodeModel.findOne(
-            { 
-                gameID: gameID
-            },
-            { 
-                branches: { $elemMatch: { branch: sourceBranch } }, _id: 0 
-            }
-        ).lean();
-        // console.log('Node Model:', nodeModel.branches.find(b => b.branch === sourceBranch).planningTypes);
-        await NodeModel.findOneAndUpdate(
-            {
-              gameID: gameID,
-              branches: { $elemMatch: { branch: targetBranch } }
-            },
-            {
-              $set: {
-                'branches.$.planningTypes': nodeModel.branches.find(b => b.branch === sourceBranch).planningTypes,
-              }
-            },
-            {
-                new: true,
-                upsert: true,
-            }
-        );
-        console.log('Done moving nodes');
-    
-        // 
-        // Analytics Events
-        // 
-        console.log('Moving event...');
-        const analyticsEvents = await AnalyticsEvents.findOne(
-            { 
-                gameID: gameID
-            },
-            { 
-                branches: { $elemMatch: { branch: sourceBranch } }, _id: 0 
-            }
-        ).lean();
-        await AnalyticsEvents.findOneAndUpdate(
-            {
-              gameID: gameID,
-              branches: { $elemMatch: { branch: targetBranch } }
-            },
-            {
-              $set: {
-                'branches.$.events': analyticsEvents.branches.find(b => b.branch === sourceBranch).events,
-              }
-            },
-            {
-                new: true,
-                upsert: true,
-            }
-        );
-        console.log('Done moving events');
-    
-        // 
-        // Offers
-        // 
-        console.log('Moving offers...');
-        const offersModel = await Offers.findOne(
-            { 
-                gameID: gameID
-            },
-            { 
-                branches: { $elemMatch: { branch: sourceBranch } }, _id: 0 
-            }
-        ).lean();
-        await Offers.findOneAndUpdate(
-            {
-              gameID: gameID,
-              branches: { $elemMatch: { branch: targetBranch } }
-            },
-            {
-              $set: {
-                'branches.$.offers': offersModel.branches.find(b => b.branch === sourceBranch).offers,
-                'branches.$.positions': offersModel.branches.find(b => b.branch === sourceBranch).positions,
-                'branches.$.pricing': offersModel.branches.find(b => b.branch === sourceBranch).pricing,
-              }
-            },
-            {
-                new: true,
-                upsert: true,
-            }
-        );
-        console.log('Done moving offers');
-    
-        // 
-        // Localization
-        // 
-        console.log('Moving localization...');
-        const localizationModel = await Localization.findOne(
-            { 
-                gameID: gameID
-            },
-            { 
-                branches: { $elemMatch: { branch: sourceBranch } }, _id: 0 
-            }
-        ).lean();
-        await Localization.findOneAndUpdate(
-            {
-              gameID: gameID,
-              branches: { $elemMatch: { branch: targetBranch } }
-            },
-            {
-              $set: {
-                'branches.$.localization': localizationModel.branches.find(b => b.branch === sourceBranch).localization,
-              }
-            },
-            {
-                new: true,
-                upsert: true,
-            }
-        );
-        console.log('Done moving localization');
-    
-        // 
-        // Planning Tree
-        // 
-        console.log('Moving planning tree...');
-        const planningTreeModel = await PlanningTreeModel.findOne(
-            { 
-                gameID: gameID
-            },
-            { 
-                branches: { $elemMatch: { branch: sourceBranch } }, _id: 0 
-            }
-        ).lean();
-        await PlanningTreeModel.findOneAndUpdate(
-            {
-              gameID: gameID,
-              branches: { $elemMatch: { branch: targetBranch } }
-            },
-            {
-              $set: {
-                'branches.$.planningTypes': planningTreeModel.branches.find(b => b.branch === sourceBranch).planningTypes,
-              }
-            },
-            {
-                new: true,
-                upsert: true,
-            }
-        );
-        console.log('Done moving planning tree');
-    
-        // 
-        // PW templates
-        // 
-        console.log('Moving PW templates...');
-        const PWtemplatesModel = await PWtemplates.findOne(
-            { 
-                gameID: gameID
-            },
-            { 
-                branches: { $elemMatch: { branch: sourceBranch } }, _id: 0 
-            }
-        ).lean();
-        await PWtemplates.findOneAndUpdate(
-            {
-              gameID: gameID,
-              branches: { $elemMatch: { branch: targetBranch } }
-            },
-            {
-              $set: {
-                'branches.$.templates': PWtemplatesModel.branches.find(b => b.branch === sourceBranch).templates,
-              }
-            },
-            {
-                new: true,
-                upsert: true,
-            }
-        );
-        console.log('Done moving PW templates');
-    
-        // 
-        // Segments
-        // 
-        console.log('Moving segments...');
-        const segmentsModel = await Segments.findOne(
-            { 
-                gameID: gameID
-            },
-            { 
-                branches: { $elemMatch: { branch: sourceBranch } }, _id: 0 
-            }
-        ).lean();
-        await Segments.findOneAndUpdate(
-            {
-              gameID: gameID,
-              branches: { $elemMatch: { branch: targetBranch } }
-            },
-            {
-              $set: {
-                'branches.$.segments': segmentsModel.branches.find(b => b.branch === sourceBranch).segments,
-              }
-            },
-            {
-                new: true,
-                upsert: true,
-            }
-        );
-        console.log('Done moving segments');
+      //
+      // Nodes
+      //
+      console.log("Moving nodes...");
+      const nodeModel = await NodeModel.findOne(
+        {
+          gameID: gameID,
+        },
+        {
+          branches: { $elemMatch: { branch: sourceBranch } },
+          _id: 0,
+        }
+      ).lean();
+      // console.log('Node Model:', nodeModel.branches.find(b => b.branch === sourceBranch).planningTypes);
+      await NodeModel.findOneAndUpdate(
+        {
+          gameID: gameID,
+          branches: { $elemMatch: { branch: targetBranch } },
+        },
+        {
+          $set: {
+            "branches.$.planningTypes": nodeModel.branches.find(
+              (b) => b.branch === sourceBranch
+            ).planningTypes,
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+        }
+      );
+      console.log("Done moving nodes");
 
-        // 
-        // AB tests
-        // 
-        console.log('Moving ab tests...');
-        const abtests = await ABTests.findOne(
-            { 
-                gameID: gameID
-            },
-            { 
-                branches: { $elemMatch: { branch: sourceBranch } }, _id: 0 
-            }
-        ).lean();
-        await ABTests.findOneAndUpdate(
-            {
-              gameID: gameID,
-              branches: { $elemMatch: { branch: targetBranch } }
-            },
-            {
-              $set: {
-                'branches.$.tests': abtests.branches.find(b => b.branch === sourceBranch).tests,
-              }
-            },
-            {
-                new: true,
-                upsert: true,
-            }
-        );
-        console.log('Done moving ab tests');
-        console.log('-------END MOVING DB CONTENT-------');
+      //
+      // Analytics Events
+      //
+      console.log("Moving event...");
+      const analyticsEvents = await AnalyticsEvents.findOne(
+        {
+          gameID: gameID,
+        },
+        {
+          branches: { $elemMatch: { branch: sourceBranch } },
+          _id: 0,
+        }
+      ).lean();
+      await AnalyticsEvents.findOneAndUpdate(
+        {
+          gameID: gameID,
+          branches: { $elemMatch: { branch: targetBranch } },
+        },
+        {
+          $set: {
+            "branches.$.events": analyticsEvents.branches.find(
+              (b) => b.branch === sourceBranch
+            ).events,
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+        }
+      );
+      console.log("Done moving events");
+
+      //
+      // Offers
+      //
+      console.log("Moving offers...");
+      const offersModel = await Offers.findOne(
+        {
+          gameID: gameID,
+        },
+        {
+          branches: { $elemMatch: { branch: sourceBranch } },
+          _id: 0,
+        }
+      ).lean();
+      await Offers.findOneAndUpdate(
+        {
+          gameID: gameID,
+          branches: { $elemMatch: { branch: targetBranch } },
+        },
+        {
+          $set: {
+            "branches.$.offers": offersModel.branches.find(
+              (b) => b.branch === sourceBranch
+            ).offers,
+            "branches.$.positions": offersModel.branches.find(
+              (b) => b.branch === sourceBranch
+            ).positions,
+            "branches.$.pricing": offersModel.branches.find(
+              (b) => b.branch === sourceBranch
+            ).pricing,
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+        }
+      );
+      console.log("Done moving offers");
+
+      //
+      // Localization
+      //
+      console.log("Moving localization...");
+      const localizationModel = await Localization.findOne(
+        {
+          gameID: gameID,
+        },
+        {
+          branches: { $elemMatch: { branch: sourceBranch } },
+          _id: 0,
+        }
+      ).lean();
+      await Localization.findOneAndUpdate(
+        {
+          gameID: gameID,
+          branches: { $elemMatch: { branch: targetBranch } },
+        },
+        {
+          $set: {
+            "branches.$.localization": localizationModel.branches.find(
+              (b) => b.branch === sourceBranch
+            ).localization,
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+        }
+      );
+      console.log("Done moving localization");
+
+      //
+      // Planning Tree
+      //
+      console.log("Moving planning tree...");
+      const planningTreeModel = await PlanningTreeModel.findOne(
+        {
+          gameID: gameID,
+        },
+        {
+          branches: { $elemMatch: { branch: sourceBranch } },
+          _id: 0,
+        }
+      ).lean();
+      await PlanningTreeModel.findOneAndUpdate(
+        {
+          gameID: gameID,
+          branches: { $elemMatch: { branch: targetBranch } },
+        },
+        {
+          $set: {
+            "branches.$.planningTypes": planningTreeModel.branches.find(
+              (b) => b.branch === sourceBranch
+            ).planningTypes,
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+        }
+      );
+      console.log("Done moving planning tree");
+
+      //
+      // PW templates
+      //
+      console.log("Moving PW templates...");
+      const PWtemplatesModel = await PWtemplates.findOne(
+        {
+          gameID: gameID,
+        },
+        {
+          branches: { $elemMatch: { branch: sourceBranch } },
+          _id: 0,
+        }
+      ).lean();
+      await PWtemplates.findOneAndUpdate(
+        {
+          gameID: gameID,
+          branches: { $elemMatch: { branch: targetBranch } },
+        },
+        {
+          $set: {
+            "branches.$.templates": PWtemplatesModel.branches.find(
+              (b) => b.branch === sourceBranch
+            ).templates,
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+        }
+      );
+      console.log("Done moving PW templates");
+
+      //
+      // Segments
+      //
+      console.log("Moving segments...");
+      const segmentsModel = await Segments.findOne(
+        {
+          gameID: gameID,
+        },
+        {
+          branches: { $elemMatch: { branch: sourceBranch } },
+          _id: 0,
+        }
+      ).lean();
+      await Segments.findOneAndUpdate(
+        {
+          gameID: gameID,
+          branches: { $elemMatch: { branch: targetBranch } },
+        },
+        {
+          $set: {
+            "branches.$.segments": segmentsModel.branches.find(
+              (b) => b.branch === sourceBranch
+            ).segments,
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+        }
+      );
+      console.log("Done moving segments");
+
+      //
+      // AB tests
+      //
+      console.log("Moving ab tests...");
+      const abtests = await ABTests.findOne(
+        {
+          gameID: gameID,
+        },
+        {
+          branches: { $elemMatch: { branch: sourceBranch } },
+          _id: 0,
+        }
+      ).lean();
+      await ABTests.findOneAndUpdate(
+        {
+          gameID: gameID,
+          branches: { $elemMatch: { branch: targetBranch } },
+        },
+        {
+          $set: {
+            "branches.$.tests": abtests.branches.find(
+              (b) => b.branch === sourceBranch
+            ).tests,
+          },
+        },
+        {
+          new: true,
+          upsert: true,
+        }
+      );
+      console.log("Done moving ab tests");
+      console.log("-------END MOVING DB CONTENT-------");
     }
     await pushChanges();
 
-
     try {
-        console.log('-------START COOKING CONTENT-------');
+      console.log("-------START COOKING CONTENT-------");
 
+      console.log("Cooking events...");
+      await cookAnalyticsEvents(gameID, sourceBranch);
+      console.log("Events cooked");
 
-        console.log('Cooking events...');
-        await cookAnalyticsEvents(gameID, sourceBranch)
-        console.log('Events cooked');
+      console.log("Cooking offers...");
+      await cookOffers(gameID, sourceBranch);
+      console.log("Offers cooked");
 
-        console.log('Cooking offers...');
-        await cookOffers(gameID, sourceBranch);
-        console.log('Offers cooked');
-    
-        console.log('Cooking entities...');
-        await cookEntities(gameID, sourceBranch)
-        console.log('Entities cooked')
+      console.log("Cooking positioned offers...");
+      await cookPositionedOffers(gameID, sourceBranch);
+      console.log("Positioned offers cooked");
 
-        console.log('Cooking AB tests...');
-        await cookABTests(gameID, sourceBranch)
-        console.log('AB tests cooked');
+      console.log("Cooking entities...");
+      await cookEntities(gameID, sourceBranch);
+      console.log("Entities cooked");
 
-        console.log('Cooking PW templates...');
-        await cookPWTemplates(gameID, sourceBranch)
-        console.log('PW templates cooked');
+      console.log("Cooking AB tests...");
+      await cookABTests(gameID, sourceBranch);
+      console.log("AB tests cooked");
 
+      console.log("Cooking PW templates...");
+      await cookPWTemplates(gameID, sourceBranch);
+      console.log("PW templates cooked");
 
-        console.log('-------END COOKING CONTENT-------');
+      console.log("Cooking localization...");
+      await cookLocalization(gameID, sourceBranch);
+      console.log("Localization cooked");
+
+      console.log("-------END COOKING CONTENT-------");
     } catch (error) {
-       throw error;
+      throw error;
     }
-
   } catch (error) {
     console.error("Error cooking content:", error);
     throw error;
@@ -324,32 +353,33 @@ async function cookPWTemplates(gameID, branch) {
     const ranges = {
       rangeMin: t.templateValueRangeMin,
       rangeMax: t.templateValueRangeMax,
-    }
-    const rangesValid = 
-    (ranges.rangeMin && ranges.rangeMin !== '') 
-    && 
-    (ranges.rangeMax && ranges.rangeMax !== '')
+    };
+    const rangesValid =
+      ranges.rangeMin &&
+      ranges.rangeMin !== "" &&
+      ranges.rangeMax &&
+      ranges.rangeMax !== "";
 
     return {
       id: t.templateID,
       codename: t.templateCodeName,
       type: t.templateType,
       defaultValue: t.templateDefaultValue,
-      ...rangesValid && rangesValid,
-    }
-  })
+      ...(rangesValid && rangesValid),
+    };
+  });
 
   // Uploading all offers to the DB
   insertData("stattemplates", cookedConfig, gameID);
-  return {success: true}
+  return { success: true };
 }
 async function cookABTests(gameID, branch) {
   const config = await getABTests(gameID, branch);
 
-  if (config.abTests.length === 0) return {success: true}
+  if (config.abTests.length === 0) return { success: true };
 
   let cookedConfig = config.abTests.map((test, i) => {
-    let tempSubj = JSON.parse(test.subject)
+    let tempSubj = JSON.parse(test.subject);
     return {
       id: test.id,
       codename: test.codename,
@@ -359,12 +389,12 @@ async function cookABTests(gameID, branch) {
         type: tempSubj.type,
         itemID: tempSubj.itemID,
       },
-    }
-  })
-  
+    };
+  });
+
   // Uploading all offers to the DB
   insertData("abtests", cookedConfig, gameID);
-  return {success: true}
+  return { success: true };
 }
 async function cookAnalyticsEvents(gameID, branch) {
   const config = await getAllAnalyticsEventsv2(gameID, branch);
@@ -390,7 +420,7 @@ async function cookOffers(gameID, branch) {
   const pricingTable = await getPricing(gameID, branch);
   const config = await getOffers(gameID, branch);
   const abtests = await getABTests(gameID, branch);
-  const associatedSKUs = await getAssociatedSKUs(gameID, 'production');
+  const associatedSKUs = await getAssociatedSKUs(gameID, "production");
 
   // Before we process any offers, we need to make copies of the ones that are in AB tests
   if (abtests.success && abtests.abTests.length > 0) {
@@ -453,111 +483,133 @@ async function cookOffers(gameID, branch) {
       asku: asku,
     };
   });
-  
 
   // Giving each offer pricing
   cookedConfig.forEach((offer, i) => {
-
     // Setting offer pricing
     if (offer.pricing.targetCurrency === "money") {
-      if (Array.isArray(pricingTable.regions) && pricingTable.regions.length > 0) {
+      if (
+        Array.isArray(pricingTable.regions) &&
+        pricingTable.regions.length > 0
+      ) {
         // Applying pricing to the offer
 
         // Checking if offer has it's own pricing and applying what it has
         let offerPricing = offer.pricing.moneyCurr.map((curr) => {
+          // console.log('Iterating currency: ', curr)
 
-            // console.log('Iterating currency: ', curr)
+          // Getting all regions using that currency
+          const currencyRegions = getCurrencyCountries(curr.cur);
+          // console.log('Currency regions: ', currencyRegions)
 
-            // Getting all regions using that currency
-            const currencyRegions = getCurrencyCountries(curr.cur)
-            // console.log('Currency regions: ', currencyRegions)
+          // Getting the default currency amount from pricing table
+          const defaultCurrencyPrice = pricingTable.currencies.find(
+            (c) => c.code === curr.cur
+          ).base;
+          // console.log('Default currency amount: ', defaultCurrencyPrice)
 
-            // Getting the default currency amount from pricing table
-            const defaultCurrencyPrice = pricingTable.currencies.find(c => c.code === curr.cur).base
-            // console.log('Default currency amount: ', defaultCurrencyPrice)
+          // Getting regional pricing from the table
+          const tableRegionalPrices = pricingTable.regions.filter((region) =>
+            currencyRegions.map((r) => r.code).includes(region.code)
+          );
+          // console.log('Table regional prices: ', tableRegionalPrices)
 
-            // Getting regional pricing from the table
-            const tableRegionalPrices = pricingTable.regions.filter(region => currencyRegions.map(r => r.code).includes(region.code))
-            // console.log('Table regional prices: ', tableRegionalPrices)
+          const discount = offer.pricing.moneyCurr.discount;
 
-            const discount = offer.pricing.moneyCurr.discount
+          // Making combined regional pricing by iterating through all regions
+          // and seeking any changes in the pricing table for them
+          // and also applying difference calculations
+          // console.log('Offer curr amount:', curr.amount)
+          const regionalPrices = currencyRegions.map((r) => {
+            const pricingTableValue = tableRegionalPrices.find(
+              (tr) => tr.code === r.code
+            )?.base;
 
-            // Making combined regional pricing by iterating through all regions
-            // and seeking any changes in the pricing table for them
-            // and also applying difference calculations
-            // console.log('Offer curr amount:', curr.amount)
-            const regionalPrices = currencyRegions.map(r => {
-
-                const pricingTableValue = tableRegionalPrices.find(tr => tr.code === r.code)?.base
-
-                if (pricingTableValue) {
-                    // If we have any pricing for this region in particular in pricing table, scale & use it
-                    const defaultDifference = Math.abs(parseFloat(pricingTableValue) / parseFloat(defaultCurrencyPrice));
-                    let resultPrice = 0
-                    if (defaultDifference !== 0) {
-                        resultPrice = defaultDifference * curr.amount;
-                    } else {
-                        resultPrice = curr.amount;
-                    }
-                    // console.log('Difference for region ', r.code, 'is', defaultDifference, 'from', pricingTableValue, 'and', defaultCurrencyPrice, 'Result price:', resultPrice)
-                    if (discount && discount !== 0) {
-                        resultPrice = resultPrice - (resultPrice * discount / 100)
-                    }
-                    return {
-                        region: r.code,
-                        value: resultPrice,
-                        currency: r.currency,
-                    }
-                } else {
-                    // If we dont have any pricing for this region, make it's price a currency value instead
-                    let resultPrice = curr.amount
-                    if (discount && discount !== 0) {
-                        resultPrice = resultPrice - (resultPrice * discount / 100)
-                    }
-                    return {
-                        region: r.code,
-                        value: resultPrice,
-                        currency: r.currency,
-                    }
-                }
-            })
-            return regionalPrices;
-        })
+            if (pricingTableValue) {
+              // If we have any pricing for this region in particular in pricing table, scale & use it
+              const defaultDifference = Math.abs(
+                parseFloat(pricingTableValue) / parseFloat(defaultCurrencyPrice)
+              );
+              let resultPrice = 0;
+              if (defaultDifference !== 0) {
+                resultPrice = defaultDifference * curr.amount;
+              } else {
+                resultPrice = curr.amount;
+              }
+              // console.log('Difference for region ', r.code, 'is', defaultDifference, 'from', pricingTableValue, 'and', defaultCurrencyPrice, 'Result price:', resultPrice)
+              if (discount && discount !== 0) {
+                resultPrice = resultPrice - (resultPrice * discount) / 100;
+              }
+              return {
+                region: r.code,
+                value: resultPrice,
+                currency: r.currency,
+              };
+            } else {
+              // If we dont have any pricing for this region, make it's price a currency value instead
+              let resultPrice = curr.amount;
+              if (discount && discount !== 0) {
+                resultPrice = resultPrice - (resultPrice * discount) / 100;
+              }
+              return {
+                region: r.code,
+                value: resultPrice,
+                currency: r.currency,
+              };
+            }
+          });
+          return regionalPrices;
+        });
         offerPricing = offerPricing.flat();
 
         // Filling missing regional pricing
-        const arrayOfRegions = Object.keys(regions).map(r => ({code: r, ...regions[r]}))
+        const arrayOfRegions = Object.keys(regions).map((r) => ({
+          code: r,
+          ...regions[r],
+        }));
         // console.log(arrayOfRegions)
         offerPricing = offerPricing.concat(
-            arrayOfRegions
-            .filter(region => offerPricing.map(p => p.region).includes(region.code) === false)
-            .map(r => {
-                // Getting the default currency amount from pricing table
-                if (!offer.pricing.moneyCurr[0]) return null
-                const defaultCurrencyPrice = pricingTable.currencies.find(c => c.code === offer.pricing.moneyCurr[0].cur).base
-                // Getting the localized price (of any currency) from table
-                const regionalPrice = pricingTable.regions.find(tr => tr.code === r.code)?.base
-                if (regionalPrice === undefined) return null
+          arrayOfRegions
+            .filter(
+              (region) =>
+                offerPricing.map((p) => p.region).includes(region.code) ===
+                false
+            )
+            .map((r) => {
+              // Getting the default currency amount from pricing table
+              if (!offer.pricing.moneyCurr[0]) return null;
+              const defaultCurrencyPrice = pricingTable.currencies.find(
+                (c) => c.code === offer.pricing.moneyCurr[0].cur
+              ).base;
+              // Getting the localized price (of any currency) from table
+              const regionalPrice = pricingTable.regions.find(
+                (tr) => tr.code === r.code
+              )?.base;
+              if (regionalPrice === undefined) return null;
 
-                const discount = offer.pricing.moneyCurr.discount
-                
-                // Finding the multiplicator we need to apply to the regional price for it to match the scale
-                const defaultDifference = Math.abs(parseFloat(regionalPrice) / parseFloat(defaultCurrencyPrice));
-                let scaledPrice = defaultDifference * offer.pricing.moneyCurr[0].amount
-                if (discount && discount !== 0) {
-                    scaledPrice = scaledPrice - (scaledPrice * discount / 100)
-                }
-                // console.log('--------------------------------------------------------')
-                // console.log('Missing price for region', r.name, r.code, r.currency)
-                // console.log('def price:', defaultCurrencyPrice, 'regional:', regionalPrice, 'diff:', defaultDifference, 'offer:', offer.pricing.moneyCurr[0].amount, 'Result:', scaledPrice)
-                // console.log('--------------------------------------------------------')
-                return {
-                    region: r.code,
-                    value: scaledPrice,
-                    currency: r.currency,
-                }
-            }).filter(Boolean)
-        )
+              const discount = offer.pricing.moneyCurr.discount;
+
+              // Finding the multiplicator we need to apply to the regional price for it to match the scale
+              const defaultDifference = Math.abs(
+                parseFloat(regionalPrice) / parseFloat(defaultCurrencyPrice)
+              );
+              let scaledPrice =
+                defaultDifference * offer.pricing.moneyCurr[0].amount;
+              if (discount && discount !== 0) {
+                scaledPrice = scaledPrice - (scaledPrice * discount) / 100;
+              }
+              // console.log('--------------------------------------------------------')
+              // console.log('Missing price for region', r.name, r.code, r.currency)
+              // console.log('def price:', defaultCurrencyPrice, 'regional:', regionalPrice, 'diff:', defaultDifference, 'offer:', offer.pricing.moneyCurr[0].amount, 'Result:', scaledPrice)
+              // console.log('--------------------------------------------------------')
+              return {
+                region: r.code,
+                value: scaledPrice,
+                currency: r.currency,
+              };
+            })
+            .filter(Boolean)
+        );
 
         offer.pricing.moneyCurr = offerPricing;
       }
@@ -565,10 +617,10 @@ async function cookOffers(gameID, branch) {
   });
 
   function getCurrencyCountries(code) {
-    let array = []
+    let array = [];
     for (const r of Object.keys(regions)) {
       if (regions[r].currency === code) {
-        array.push({code: r, ...regions[r]});
+        array.push({ code: r, ...regions[r] });
       }
     }
     return array;
@@ -580,7 +632,7 @@ async function cookOffers(gameID, branch) {
       (o) =>
         // Keeping only the offers that have money pricing & the base currency isn't 0
         o.pricing.targetCurrency === "money" &&
-        o.pricing.moneyCurr.some(v => v.value > 0)
+        o.pricing.moneyCurr.some((v) => v.value > 0)
     )
     .map((o) => {
       let temp = { ...o };
@@ -619,12 +671,31 @@ async function cookOffers(gameID, branch) {
     throw error;
   }
 
+  // Lastly, give 'isValidIAP' bool to all offers that we know are inside Google Play IAPs
+  cookedConfig = cookedConfig.map((offer) => {
+    offer.isValidIAP = realMoneyOffers.some((o) => o.id === offer.id);
+    return offer;
+  });
+
   // Uploading all offers to the DB
   insertData("offers", cookedConfig, gameID);
-  return {success: true}
+  return { success: true };
+}
+async function cookPositionedOffers(gameID, branch) {
+  const config = await getPositionedOffers(gameID, branch);
+  let cookedConfig = config.map((pos) => ({
+    id: pos.positionID,
+    codename: pos.positionCodeName,
+    segments: pos.segments.map((s) => ({
+      id: s.segmentID,
+      offers: s.offers,
+    })),
+  }));
+
+  insertData("positionedOffers", cookedConfig, gameID);
+  return { success: true };
 }
 async function cookEntities(gameID, branch) {
-  const localizationTable = await getLocalization(gameID, branch, "entities");
   let dataTree = await getNodeTree(gameID, branch, "entity");
   dataTree = dataTree[0];
   let config = await getPlanningNodes(gameID, branch, "entity");
@@ -633,7 +704,7 @@ async function cookEntities(gameID, branch) {
 
   config.forEach((entity, i) => {
     let result = buildEntityConfig(entity);
-    console.log('Building config for entity', entity)
+    console.log("Building config for entity", entity);
     if (result !== null) {
       cookedConfig.push(result);
     }
@@ -940,7 +1011,10 @@ async function cookEntities(gameID, branch) {
       gatherInheritedConfigs(parentCategory);
 
       result.inheritedCategories = tempInheritedCategories;
-      result.config = result.specifics.mainConfigs !== '' ? JSON.parse(result.specifics.mainConfigs) : [];
+      result.config =
+        result.specifics.mainConfigs !== ""
+          ? JSON.parse(result.specifics.mainConfigs)
+          : [];
 
       if (inheritedConfigs.length > 0) {
         inheritedConfigs = resolveInheritance(inheritedConfigs);
@@ -955,6 +1029,53 @@ async function cookEntities(gameID, branch) {
     delete result.specifics;
     return result;
   }
+
+  // Uploading all offers to the DB
+  insertData("entities", cookedConfig, gameID);
+}
+async function cookLocalization(gameID, branch) {
+  const localizationTable = await getLocalizationTable(gameID, branch);
+  const configEntities = localizationTable.entities
+    .map((item) => {
+      return {
+        id: item.key,
+        translations: item.translations.map((t) => ({
+          code: t.code,
+          value: t.value,
+        })),
+      };
+    })
+    .filter(Boolean);
+
+  const configOffers = localizationTable.offers
+    .map((item) => {
+      return {
+        id: item.key,
+        translations: item.translations.map((t) => ({
+          code: t.code,
+          value: t.value,
+        })),
+      };
+    })
+    .filter(Boolean);
+
+  const configCustom = localizationTable.custom
+    .map((item) => {
+      return {
+        id: item.key,
+        translations: item.translations.map((t) => ({
+          code: t.code,
+          value: t.value,
+        })),
+      };
+    })
+    .filter(Boolean);
+
+  const cookedConfig = [].concat(configEntities, configOffers, configCustom);
+
+  // Uploading all localization to the DB
+  insertData("localization", cookedConfig, gameID);
+  return { success: true };
 }
 
 function findNodeInTreeByID(node, targetNodeID) {

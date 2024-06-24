@@ -86,30 +86,48 @@ app.post("/api/v1/analytics/sendEvent", async (req, res) => {
     return;
   }
 
-  if (payload.length === 1) {
-    if (payload[0].type === 'newSession') { 
-      console.log('Acquired new session', { success: true, message: "OK", data: gameId });
-      res.status(200).json({ success: true, message: "OK", data: gameId });
-      return
-    }
+  if (payload[payload.length - 1].type === "newSession") {
+    console.log("Acquired new session", {
+      success: true,
+      message: "OK",
+      data: gameId,
+    });
+    res.status(200).json({
+      success: true,
+      message: "OK",
+      data: {
+        key: gameId,
+        playerData: [
+          {
+            elementID: "totalPaymentsSumm",
+            value: 123,
+          },
+          {
+            elementID: "totalPaymentsCount",
+            value: 123,
+          },
+        ],
+        currency: "USD",
+      },
+    });
+    return;
   }
+
   payload.forEach((event) => {
     switch (event.type) {
       case "newSession":
-        
         break;
       default:
-        res
-          .status(500)
-          .json({
-            success: false,
-            message: "Wrong event type provided or Internal Server Error",
-          });
         break;
     }
   });
 
-  // res.status(200).json({ success: true, message: "OK" });
+  // res.status(500).json({
+  //   success: false,
+  //   message: "Wrong event type provided or Internal Server Error",
+  // });
+
+  res.status(200).json({ success: true, message: "OK" });
 });
 
 export async function getGameIdBySecret(secret) {
@@ -119,6 +137,35 @@ export async function getGameIdBySecret(secret) {
   } else {
     return null;
   }
+}
+async function getWarehousePlayerData(gameID, branchName, clientID) {
+  try {
+    // Find the PlayerWarehouse document by gameID, branchName, and clientID
+    const playerWarehouse = await PWplayers.findOne({
+      gameID: isDemoGameID(gameID),
+      branch: branchName,
+      clientID,
+    });
+
+    if (!playerWarehouse) {
+      const error = new Error("PlayerWarehouse not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return playerWarehouse;
+  } catch (error) {
+    throw error;
+  }
+}
+function isDemoGameID(gameID) {
+  // Checking if gameID contains demo gameID at the start
+  for (const demoGameID of demoGames) {
+    if (gameID.startsWith(demoGameID)) {
+      return demoGameID;
+    }
+  }
+  return gameID;
 }
 
 // {

@@ -124,6 +124,25 @@ export async function getLocalizationItems(gameID, branch, type, sids) {
   }
 }
 
+export async function getLocalizationTable(gameID, branch) {
+  try {
+    let result = [];
+    result = await Localization.aggregate([
+      { $match: { gameID } },
+      { $unwind: "$branches" },
+      { $match: { "branches.branch": branch } },
+      { $unwind: "$branches.localization" },
+      { $replaceRoot: { newRoot: `$branches.localization` } },
+    ]);
+    if (result.length !== 0) {
+      return result[0];
+    } else {
+      return null;
+    }
+  } catch (error) {
+    throw error;
+  }
+}
 export async function getLocalization(gameID, branch, type) {
   try {
     let array = [];

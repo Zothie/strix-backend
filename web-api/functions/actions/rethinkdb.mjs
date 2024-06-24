@@ -6,7 +6,9 @@ const tablesNamespaces = [
   "offers",
   "entities",
   "abtests",
+  "localization",
   "stattemplates",
+  "positionedOffers",
 ];
 
 export function checkDBConnection() {
@@ -111,15 +113,13 @@ export async function insertData(tableName, body, gameID) {
   // All inbound data must be in the following format: [ { id: 1, ...object }, { id: 2, ...object },... ]
   // Here we make a diff, removing the data that is not present in the current data, and inserting the new data.
   try {
-
     // Find checksums of all documents we want to insert
-    const bodyWithChecksum = body.map(document => {
+    const bodyWithChecksum = body.map((document) => {
       return {
-       ...document,
-        checksum: calculateChecksum(document)
-      }
-    })
-
+        ...document,
+        checksum: calculateChecksum(document),
+      };
+    });
 
     // Always try to populate the DB for this game
     // in case this is the first time the table is being used
@@ -166,7 +166,9 @@ export async function insertData(tableName, body, gameID) {
 
         // Find IDs to remove from the table as they are not present in the new data
         const idsToRemove = currentData
-          .filter((item) => !newDataIds.some((newItem) => newItem.id === item.id))
+          .filter(
+            (item) => !newDataIds.some((newItem) => newItem.id === item.id)
+          )
           .map((item) => item.id);
 
         // Make diff changes
@@ -227,7 +229,7 @@ function calculateChecksum(jsonDocument) {
 
   let checksum = 0;
   for (let i = 0; i < jsonString.length; i++) {
-      checksum += jsonString.charCodeAt(i);
+    checksum += jsonString.charCodeAt(i);
   }
 
   return checksum;
