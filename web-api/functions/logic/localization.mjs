@@ -50,11 +50,14 @@ export async function changeLocalizationItemKey(
       },
       {
         $set: {
-          [`branches.$[branch].localization.${type}.$.key`]: newKey,
+          [`branches.$[branch].localization.${type}.$[item].key`]: newKey,
         },
       },
       {
-        arrayFilters: [{ "branch.branch": branch }],
+        arrayFilters: [
+          { "branch.branch": branch }, 
+          { [`item.sid`]: sid }
+        ],
         new: true,
       }
     ).exec();
@@ -167,6 +170,7 @@ export async function updateLocalization(
   translationObjects,
   categoryNodeID
 ) {
+
   let fieldToUpdate;
   switch (type) {
     case "offers":
@@ -240,6 +244,7 @@ export async function updateLocalization(
       }
     }
   });
+
 
   const filter = { gameID };
   const arrayFilters = [{ gameID: gameID }, { "branch.branch": branch }];

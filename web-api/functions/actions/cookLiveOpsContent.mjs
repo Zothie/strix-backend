@@ -704,7 +704,6 @@ async function cookEntities(gameID, branch) {
 
   config.forEach((entity, i) => {
     let result = buildEntityConfig(entity);
-    console.log("Building config for entity", entity);
     if (result !== null) {
       cookedConfig.push(result);
     }
@@ -718,7 +717,7 @@ async function cookEntities(gameID, branch) {
     // Isolating the values we need, and putting entityCategory/entityBasic as "specifis" fields
     // We will remove it later
     let result = {
-      nodeID: e.nodeID,
+      id: e.nodeID,
       specifics: e.entityCategory ? e.entityCategory : e.entityBasic,
     };
 
@@ -1026,9 +1025,26 @@ async function cookEntities(gameID, branch) {
       }
     }
 
+    // Changing parent ID from _id to nodeID value
+    result.parent = findNodeInTreeByID(dataTree, result.specifics.parentCategory).ID
+
     delete result.specifics;
     return result;
   }
+
+  // Making "children" field so we can track which nodes are direct children of each other
+  cookedConfig.forEach((entity) => {
+    if (entity.parent && entity.parent !== '') {
+      const i = cookedConfig.findIndex(e => e.nodeID === entity.parent);
+  
+      if (i !== -1) {
+        if (!cookedConfig[i].children) {
+          cookedConfig[i].children = [];
+        }
+        cookedConfig[i].children.push(entity.nodeID);
+      }
+    }
+  });
 
   // Uploading all offers to the DB
   insertData("entities", cookedConfig, gameID);
