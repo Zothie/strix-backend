@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 2.3.2
+2024-06-27
+
+### Fixes
+
+- small fixes (2ff76cfa1ae8bcb64616e02368438535d5bb4315)
+
 ## 2.3.1
 2024-06-24
 
