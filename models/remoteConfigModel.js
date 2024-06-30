@@ -1,4 +1,4 @@
-import { Schema, model } from 'mongoose';
+import { Schema, model } from "mongoose";
 const valueSchema = new Schema({
   segmentID: String,
   value: String,
@@ -23,7 +23,7 @@ const paramSchema = new Schema({
 const branchSchema = new Schema({
   branch: {
     type: String,
-    enum: ['development', 'stage', 'production'],
+    enum: ["development", "staging", "production"],
     required: true,
   },
   params: [paramSchema],
@@ -37,4 +37,4 @@ const remoteConfigSchema = new Schema({
   branches: [branchSchema],
 });
 
-export const RemoteConfig = model('RemoteConfig', remoteConfigSchema);
+export const RemoteConfig = model("RemoteConfig", remoteConfigSchema);

@@ -485,7 +485,7 @@ export async function getWarehousePlayers(gameID, branchName) {
       {
         elements: 0,
         inventory: 0,
-        goods: 0,
+        offers: 0,
         abtests: 0,
         segments: 0,
         branch: 0,

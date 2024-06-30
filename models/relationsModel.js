@@ -1,4 +1,4 @@
-import { Schema, model } from 'mongoose';
+import { Schema, model } from "mongoose";
 const linkSchema = new Schema({
   source: String,
   target: String,
@@ -22,22 +22,22 @@ const relationSchema = new Schema({
 });
 
 const contextNodeSchema = new Schema({
-    nodeID: String,
-    nodeType: String,
-    emotion: String,
-    instinct: String,
+  nodeID: String,
+  nodeType: String,
+  emotion: String,
+  instinct: String,
 });
 const contextSchema = new Schema({
-    contextID: String,
-    name: String,
-    comment: String,
-    nodes: [contextNodeSchema],
+  contextID: String,
+  name: String,
+  comment: String,
+  nodes: [contextNodeSchema],
 });
 
 const branchSchema = new Schema({
   branch: {
     type: String,
-    enum: ['development', 'stage', 'production'],
+    enum: ["development", "staging", "production"],
     required: true,
   },
   relations: [relationSchema],
@@ -52,5 +52,4 @@ const relationsSchema = new Schema({
   branches: [branchSchema],
 });
 
-export const Relations = model('Relation', relationsSchema, 'relations');
-
+export const Relations = model("Relation", relationsSchema, "relations");

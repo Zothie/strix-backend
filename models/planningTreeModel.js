@@ -1,4 +1,4 @@
-import { Schema, model } from 'mongoose';
+import { Schema, model } from "mongoose";
 const planningTreeSubnodeSchema = new Schema({
   nodeID: {
     type: String,
@@ -21,7 +21,14 @@ const planningTreePlanningTypeSchema = new Schema({
   type: {
     type: String,
     required: true,
-    enum: ['entity', 'gameplay', 'events', 'locations', 'userinterface', 'gameoverview'],
+    enum: [
+      "entity",
+      "gameplay",
+      "events",
+      "locations",
+      "userinterface",
+      "gameoverview",
+    ],
   },
   nodes: [planningTreeSubnodeSchema],
 });
@@ -29,7 +36,7 @@ const planningTreePlanningTypeSchema = new Schema({
 const planningTreeBranchSchema = new Schema({
   branch: {
     type: String,
-    enum: ['development', 'stage', 'production'],
+    enum: ["development", "staging", "production"],
     required: true,
   },
   planningTypes: [planningTreePlanningTypeSchema],
@@ -43,5 +50,4 @@ const planningTreeSchema = new Schema({
   branches: [planningTreeBranchSchema],
 });
 
-export const PlanningTreeModel = model('Planning', planningTreeSchema);
-
+export const PlanningTreeModel = model("Planning", planningTreeSchema);

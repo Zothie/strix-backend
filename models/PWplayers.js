@@ -1,23 +1,4 @@
-import { Schema, model } from 'mongoose';
-const propertySchema = new Schema({
-  propertyID: String,
-  name: String,
-  valueType: String,
-  value: String,
-});
-
-const entitiesSchema = new Schema({
-  entityID: String,
-  quantity: Number,
-  properties: [propertySchema],
-});
-const inventorySchema = new Schema({
-    entities: [entitiesSchema],
-  });
-  const goodsSchema = new Schema({
-    goodID: String,
-    goodLimitLeft: Number,
-  });
+import { Schema, model } from "mongoose";
 
 const analyticsElementSchema = new Schema({
   elementID: String,
@@ -33,7 +14,6 @@ const statisticsElementSchema = new Schema({
   },
 });
 
-
 const playerSchema = new Schema({
   gameID: {
     type: String,
@@ -42,18 +22,17 @@ const playerSchema = new Schema({
   clientID: String,
   branch: {
     type: String,
-    enum: ['development', 'stage', 'production'],
+    enum: ["development", "staging", "production"],
     required: true,
   },
   elements: {
     analytics: [analyticsElementSchema],
     statistics: [statisticsElementSchema],
   },
-  inventory: [inventorySchema],
-  goods: [goodsSchema],
+  inventory: Array,
+  offers: Array,
   abtests: [String],
   segments: [String],
 });
 
-export const PWplayers = model('pwplayers', playerSchema);
-
+export const PWplayers = model("pwplayers", playerSchema);

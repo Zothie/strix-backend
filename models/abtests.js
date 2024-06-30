@@ -1,4 +1,4 @@
-import { Schema, model } from 'mongoose';
+import { Schema, model } from "mongoose";
 
 const tests = new Schema({
   id: String,
@@ -13,6 +13,7 @@ const tests = new Schema({
   paused: Boolean,
   archived: Boolean,
   archivedResult: String,
+  participants: [String],
 });
 
 const branchSchema = new Schema({
@@ -25,4 +26,4 @@ const testsSchema = new Schema({
   branches: [branchSchema],
 });
 
-export const ABTests = model('ABTests', testsSchema);
+export const ABTests = model("ABTests", testsSchema);

@@ -389,7 +389,7 @@ async function populatePlayerWarehouse_brawlDemo(gameID, branchName) {
         }),
       },
       inventory: [],
-      goods: [],
+      offers: [],
       abtests: [],
       segments: [],
     };
@@ -673,21 +673,20 @@ async function populateElements(gameID, branchName) {
 }
 // populateElements('c4a6f94b-fad9-481a-bb1e-3a1d42f40559', 'development')
 
-
 async function populateABtests(gameID) {
   const newABTests = new ABTests({
     gameID: gameID,
     branches: [
       {
-        branch: 'development',
+        branch: "development",
         tests: [],
       },
       {
-        branch: 'stage',
+        branch: "staging",
         tests: [],
       },
       {
-        branch: 'production',
+        branch: "production",
         tests: [],
       },
     ],
@@ -695,19 +694,17 @@ async function populateABtests(gameID) {
   await newABTests.save();
 }
 
-
 async function cleanAllDemos() {
   // Remove all demo studios, publishers and users which IDs start with demo_
-  
 
   // REMAKE THIS FUNCTION SO IT ONLY CLEANS DEMO DATA OF DEMO USERS
   // OTHERWISE IT WILL REMOVE DEMO GAMES GIVEN TO REGULAR USERS AFTER ONBOARDING
-  await Studio.deleteMany({ studioID: /^demo_/ })
-  await Publisher.deleteMany({ publisherID: /^demo_/ })
-  await User.deleteMany({ isDemo: true })
+  await Studio.deleteMany({ studioID: /^demo_/ });
+  await Publisher.deleteMany({ publisherID: /^demo_/ });
+  await User.deleteMany({ isDemo: true });
   for (const demoID of demoGames) {
     const query = { gameID: new RegExp(`^${demoID}_`) };
-    console.log('Removing demo games for:', demoID, '| Query:', query)
+    console.log("Removing demo games for:", demoID, "| Query:", query);
     await Game.deleteMany(query);
     await NodeModel.deleteMany(query);
     await Segments.deleteMany(query);
