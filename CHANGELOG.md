@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 2.4.0
+2024-06-30
+
+### Features
+
+- sdk api module WIP, new session event handling WIP (87cdc06921bfafc56c7db70393bbb88d5c597003)
+
 ## 2.3.2
 2024-06-27
 
