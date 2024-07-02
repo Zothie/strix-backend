@@ -1,10 +1,5 @@
-export async function processNewSessionEvent(gameObj, build, device) {
+export async function processNewSessionEvent(res, gameObj, build, device) {
   try {
-    console.log("Acquired new session", {
-      success: true,
-      message: "OK",
-      data: gameObj._id.ToString(),
-    });
 
     // Init new player. Creates new player or returns the existing one
     const playerData = await initializeNewPlayerSession(
@@ -12,12 +7,13 @@ export async function processNewSessionEvent(gameObj, build, device) {
       build,
       device
     );
+    
 
     res.status(200).json({
       success: true,
       message: "OK",
       data: {
-        key: gameObj._id.ToString(),
+        key: gameObj._id.toString(),
         playerData,
         currency: "USD",
       },

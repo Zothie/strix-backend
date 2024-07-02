@@ -1,4 +1,5 @@
-import { ABTests } from "../models/abtests.js";
+import { ABTests } from "../../models/abtests.js";
+import { PWplayers } from "../../models/PWplayers.js";
 
 export async function getOngoingABTests(gameID, branchName) {
   try {
@@ -35,16 +36,16 @@ export async function getOngoingABTests(gameID, branchName) {
     return { success: false, message: "Internal Server Error" };
   }
 }
-export async function tryToAddPlayerToTest(gameID, branch, playerObj, testObj) {
+export function tryToAddPlayerToTest(gameID, branch, playerObj, testObj) {
   // Returns either null or string id of added test
   try {
 
     // Continue only if player does not participate in this test yet
-    if (!playerObj.abtests.contains(testObj.id)) {
+    if (!playerObj.abtests.includes(testObj.id)) {
       let testSegments = JSON.parse(testObj.segments);
 
       // Continue only if player has the segment to be tested
-      if (playerObj.segments.contains(testSegments.test)) {
+      if (playerObj.segments.includes(testSegments.test)) {
         let rand = randomNumberInRange(0, 1, true, 1);
 
         // Check if generated random value landed in % range
@@ -88,32 +89,17 @@ export async function tryToAddPlayerToTest(gameID, branch, playerObj, testObj) {
   }
 }
 
-export async function clearNonExistingTestsFromPlayer(gameID, branch, playerObj, testIDs) {
+export function clearNonExistingTestsFromPlayer(gameID, branch, playerObj, testIDs) {
   // Returns cleaned test list
   try {
+    
+    let modifiedTestsList = playerObj.abtests.filter(t => testIDs.includes(t));
 
-    let modifiedTestsList = playerObj.abtests.filter(t => testIDs.contains(t.id));
-
-    // Update test and player docs accordingly
-    ABTests.updateOne(
-      {
-        gameID: gameID,
-      },
-      {
-        $push: {
-          "branches.$[branch].tests.$[test].participants":
-            playerObj.clientID,
-        },
-        arrayFilters: [
-          { "branch.branch": branch },
-          { "test.id": testObj.id },
-        ],
-      }
-    );
-
+    // Update player doc accordingly
     PWplayers.updateOne({
       gameID: gameID,
       clientID: playerObj.clientID,
+      branch: branch,
     }, {
       $set: {
         abtests: modifiedTestsList,

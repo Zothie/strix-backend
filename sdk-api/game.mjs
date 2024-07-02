@@ -8,6 +8,7 @@ import cors from "cors";
 import mongoose from "mongoose";
 import bodyParser from "body-parser";
 import http from "http";
+import morgan from "morgan";
 dotenv.config();
 
 const app = express();
@@ -24,6 +25,8 @@ const emitter = new EventEmitter();
 mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 app.use(bodyParser.json());
+
+app.use(morgan("tiny"));
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb" }));
@@ -78,7 +81,7 @@ app.post("/api/v1/analytics/sendEvent", async (req, res) => {
     payload,
   } = req.body;
 
-  console.log("Incoming request to /api/v1/analytics/sendEvent", req.body);
+  console.log("/api/v1/analytics/sendEvent", req.body);
 
   if (!secret)
     return res
@@ -129,8 +132,8 @@ app.post("/api/v1/analytics/sendEvent", async (req, res) => {
 
   // Answering to the last event in payload
   switch (payload[payload.length - 1].type) {
-    case "newSessions":
-      processNewSessionEvent(gameObj, build, device)
+    case "newSession":
+      processNewSessionEvent(res, gameObj, build, device);
       return;
     default:
       res.status(200).json({ success: true, message: "OK" });
@@ -145,6 +148,208 @@ app.post("/api/v1/analytics/sendEvent", async (req, res) => {
         break;
     }
   });
+});
+
+app.post("/api/v1/addValueToStatisticElement", async (req, res) => {
+  const { secret, device, build, elementID, value } = req.body;
+
+  console.log("/api/v1/addValueToStatisticElement", req.body);
+
+  try {
+    if (!secret)
+      return res
+        .status(400)
+        .json({ success: false, message: "API key is required" });
+    if (!device)
+      return res
+        .status(400)
+        .json({ success: false, message: "Device ID is required" });
+    if (!build)
+      return res
+        .status(400)
+        .json({ success: false, message: "Build type is required" });
+    if (!elementID)
+      return res
+        .status(400)
+        .json({ success: false, message: "Target element ID is required" });
+    if (!value)
+      return res
+        .status(400)
+        .json({ success: false, message: "Target element value is required" });
+
+    const gameObj = await getCachedGameIdBySecret(secret);
+    if (!gameObj) {
+      res.status(400).json({ success: false, message: "Invalid secret" });
+      return;
+    }
+
+    await addValueToStatisticElement(gameObj, build, device, elementID, value);
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error at addValueToStatisticElement:", error);
+    if (error.kind && error.valueType) {
+      res.status(500).json({
+        message: `Error trying to add value to statistic element. The element is '${error.kind}' type, got '${error.valueType}' instead.`,
+      });
+    } else {
+      res.status(500).json({
+        message: `Internal Server Error`,
+      });
+    }
+  }
+});
+
+app.post("/api/v1/subtractValueFromStatisticElement", async (req, res) => {
+  const { secret, device, build, elementID, value } = req.body;
+
+  console.log("/api/v1/subtractValueFromStatisticElement", req.body);
+
+  try {
+    if (!secret)
+      return res
+        .status(400)
+        .json({ success: false, message: "API key is required" });
+    if (!device)
+      return res
+        .status(400)
+        .json({ success: false, message: "Device ID is required" });
+    if (!build)
+      return res
+        .status(400)
+        .json({ success: false, message: "Build type is required" });
+    if (!elementID)
+      return res
+        .status(400)
+        .json({ success: false, message: "Target element ID is required" });
+    if (!value)
+      return res
+        .status(400)
+        .json({ success: false, message: "Target element value is required" });
+
+    const gameObj = await getCachedGameIdBySecret(secret);
+    if (!gameObj) {
+      res.status(400).json({ success: false, message: "Invalid secret" });
+      return;
+    }
+
+    await subtractValueFromStatisticElement(
+      gameObj,
+      build,
+      device,
+      elementID,
+      value
+    );
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error at subtractValueFromStatisticElement:", error);
+    if (error.kind && error.valueType) {
+      res.status(500).json({
+        message: `Error trying to add value to statistic element. The element is '${error.kind}' type, got '${error.valueType}' instead.`,
+      });
+    } else {
+      res.status(500).json({
+        message: `Internal Server Error`,
+      });
+    }
+  }
+});
+
+app.post("/api/v1/setValueToStatisticElement", async (req, res) => {
+  const { secret, device, build, elementID, value } = req.body;
+
+  console.log("/api/v1/setValueToStatisticElement", req.body);
+
+  try {
+    if (!secret)
+      return res
+        .status(400)
+        .json({ success: false, message: "API key is required" });
+    if (!device)
+      return res
+        .status(400)
+        .json({ success: false, message: "Device ID is required" });
+    if (!build)
+      return res
+        .status(400)
+        .json({ success: false, message: "Build type is required" });
+    if (!elementID)
+      return res
+        .status(400)
+        .json({ success: false, message: "Target element ID is required" });
+    if (!value)
+      return res
+        .status(400)
+        .json({ success: false, message: "Target element value is required" });
+
+    const gameObj = await getCachedGameIdBySecret(secret);
+    if (!gameObj) {
+      res.status(400).json({ success: false, message: "Invalid secret" });
+      return;
+    }
+
+    await setValueToStatisticElement(gameObj, build, device, elementID, value);
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error at setValueToStatisticElement:", error);
+    if (error.kind && error.valueType) {
+      res.status(500).json({
+        message: `Error trying to add value to statistic element. The element is '${error.kind}' type, got '${error.valueType}' instead.`,
+      });
+    } else {
+      res.status(500).json({
+        message: `Internal Server Error`,
+      });
+    }
+  }
+});
+
+app.post("/api/v1/getElementValue", async (req, res) => {
+  const { secret, device, build, elementID } = req.body;
+
+  console.log("/api/v1/getElementValue", req.body);
+
+  try {
+    if (!secret)
+      return res
+        .status(400)
+        .json({ success: false, message: "API key is required" });
+    if (!device)
+      return res
+        .status(400)
+        .json({ success: false, message: "Device ID is required" });
+    if (!build)
+      return res
+        .status(400)
+        .json({ success: false, message: "Build type is required" });
+    if (!elementID)
+      return res
+        .status(400)
+        .json({ success: false, message: "Target element ID is required" });
+
+    const gameObj = await getCachedGameIdBySecret(secret);
+    if (!gameObj) {
+      res.status(400).json({ success: false, message: "Invalid secret" });
+      return;
+    }
+
+    const result = await getElementValue(gameObj, build, device, elementID);
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error("Error at setValueToStatisticElement:", error);
+    if (error.kind && error.valueType) {
+      res.status(500).json({
+        message: `Error trying to add value to statistic element. The element is '${error.kind}' type, got '${error.valueType}' instead.`,
+      });
+    } else {
+      res.status(500).json({
+        message: `Internal Server Error`,
+      });
+    }
+  }
 });
 
 // {

@@ -50,7 +50,6 @@ const druidRequestOptions = {
   },
 };
 
-// Разрешить запросы с указанных доменов и поддерживать учетные данные
 const allowedOrigins = [
   "http://localhost:5173",
   "http://26.250.173.89:5173",
@@ -1460,8 +1459,14 @@ async function checkForTemplatesByDesignEvent(
 // Send data to Kafka -> Druid. We only send clean refined data and guarantee there is
 // valid topic and valid data are given to function
 const kafka = new Kafka({
-  clientId: "my-app123",
-  brokers: ["192.168.243.128:9092"],
+  clientId: process.env.KAFKA_CLIENT_ID,
+  brokers: [process.env.KAFKA_BOOTSTRAP_SERVER],
+  ssl: false,
+  sasl: {
+    mechanism: 'plain',
+    username: process.env.KAFKA_USERNAME,
+    password: process.env.KAFKA_PASSWORD
+  },
 });
 const producer = kafka.producer();
 

@@ -1,4 +1,9 @@
+import { Segments } from "../../models/segmentsModel.js";
+
+
 export async function incrementSegmentPlayerCount(
+  gameID,
+  branch,
   segmentID,
   incrementNumber = 1
 ) {
@@ -6,7 +11,7 @@ export async function incrementSegmentPlayerCount(
     await Segments.updateOne(
       {
         gameID: gameID,
-        "branches.branch": branchName,
+        "branches.branch": branch,
         "branches.segments.segmentID": segmentID,
       },
       {
@@ -16,7 +21,7 @@ export async function incrementSegmentPlayerCount(
       },
       {
         arrayFilters: [
-          { "i.branch": branchName },
+          { "i.branch": branch },
           { "j.segmentID": segmentID },
         ],
       }

@@ -9,7 +9,7 @@ const analyticsElementSchema = new Schema({
 const statisticsElementSchema = new Schema({
   elementID: String,
   elementValue: {
-    type: String,
+    type: Schema.Types.Mixed,
     cast: false,
   },
 });

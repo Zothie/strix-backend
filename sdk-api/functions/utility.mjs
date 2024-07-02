@@ -1,10 +1,13 @@
+import { Game } from "../../models/gameModel.js";
+
+
 let gameIds = {};
 export async function getCachedGameIdBySecret(secret) {
   let result = gameIds[secret];
   if (!result) {
-    result = await getGameIdBySecret(secret);
+    result = await getGameBySecret(secret);
     gameIds[secret] = result;
-    return;
+    return result;
   } else {
     return result;
   }
@@ -29,3 +32,8 @@ export const randomNumberInRange = (min, max, isFloat, toFixed = 3) => {
     return Math.round(Math.random() * (max - min)) + min;
   }
 };
+
+
+export function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}

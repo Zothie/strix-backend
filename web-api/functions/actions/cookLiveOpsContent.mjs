@@ -354,19 +354,29 @@ async function cookPWTemplates(gameID, branch) {
       rangeMin: t.templateValueRangeMin,
       rangeMax: t.templateValueRangeMax,
     };
+
     const rangesValid =
       ranges.rangeMin &&
       ranges.rangeMin !== "" &&
       ranges.rangeMax &&
       ranges.rangeMax !== "";
 
-    return {
-      id: t.templateID,
-      codename: t.templateCodeName,
-      type: t.templateType,
-      defaultValue: t.templateDefaultValue,
-      ...(rangesValid && rangesValid),
-    };
+      if (rangesValid) {
+        return {
+          id: t.templateID,
+          codename: t.templateCodeName,
+          type: t.templateType,
+          defaultValue: t.templateDefaultValue,
+          ...ranges,
+        };
+      } else {
+        return {
+          id: t.templateID,
+          codename: t.templateCodeName,
+          type: t.templateType,
+          defaultValue: t.templateDefaultValue,
+        };
+      }
   });
 
   // Uploading all offers to the DB
