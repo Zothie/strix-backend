@@ -2,6 +2,13 @@
 
 <!--- next entry here -->
 
+## 2.4.1
+2024-07-02
+
+### Fixes
+
+- player warehouse small fixes (33ca7874dacc2ed7eb7a3ed61e8d56f4bc296bac)
+
 ## 2.4.0
 2024-06-30
 
